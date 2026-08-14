@@ -1,0 +1,37 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/spfx-serve.schema.json",
+  "port": 4321,
+  "https": true,
+  "serveConfigurations": {
+    "default": {
+      "pageUrl": "https://<TENANT>.sharepoint.com/sites/<SITE>/Lists/<LIST_URL_ENCODED>/AllItems.aspx",
+      "customActions": {
+        "76f8f770-0a2d-4498-ba55-ba1898198894": {
+          "location": "ClientSideExtension.ListViewCommandSet.CommandBar",
+          "properties": {
+            "flowUrl": "<FLOW_URL>",
+            "targetListTitle": "<TARGET_LIST_TITLE>",
+            "favoritesListTitle": "<FAVORITES_LIST_TITLE>",
+            "promptIdField": "<PROMPT_ID_FIELD>",
+            "copyFields": "<COPY_FIELDS>"
+          }
+        }
+      }
+    },
+    "favoritos": {
+      "pageUrl": "https://<TENANT>.sharepoint.com/sites/<SITE>/Lists/<FAVORITES_LIST_URL_ENCODED>/AllItems.aspx",
+      "customActions": {
+        "76f8f770-0a2d-4498-ba55-ba1898198894": {
+          "location": "ClientSideExtension.ListViewCommandSet.CommandBar",
+          "properties": {
+            "flowUrl": "<FLOW_URL>",
+            "targetListTitle": "<TARGET_LIST_TITLE>",
+            "favoritesListTitle": "<FAVORITES_LIST_TITLE>",
+            "promptIdField": "<PROMPT_ID_FIELD>",
+            "copyFields": "<COPY_FIELDS>"
+          }
+        }
+      }
+    }
+  }
+}

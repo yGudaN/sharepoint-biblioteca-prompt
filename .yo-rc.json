@@ -1,0 +1,23 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "whichFolder": "subdir",
+    "solutionName": "listbutton",
+    "environment": "spo",
+    "packageManager": "npm",
+    "useGulp": false,
+    "componentType": "extension",
+    "extensionType": "ListViewCommandSet",
+    "template": "none",
+    "componentName": "ListButton",
+    "plusBeta": false,
+    "isCreatingSolution": true,
+    "nodeVersion": "22.17.1",
+    "sdksVersions": {},
+    "version": "1.23.2",
+    "libraryName": "listbutton",
+    "libraryId": "df9061d4-5751-41e4-867f-a18c78274f66",
+    "solutionShortDescription": "listbutton description",
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false
+  }
+}
