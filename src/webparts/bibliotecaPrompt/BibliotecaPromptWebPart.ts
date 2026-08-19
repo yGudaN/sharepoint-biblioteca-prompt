@@ -170,6 +170,8 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
           background: var(--bp-bg);
           padding: 16px;
           border-radius: 8px;
+          min-height: 100vh;
+          box-sizing: border-box;
           transition: background 0.2s ease, color 0.2s ease;
         }
         .bp-wrap.bp-dark {
