@@ -1,0 +1,29 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
+
+  "id": "d3f7a2e4-6b91-4c8f-a5d2-1c9e4b7f3a8b",
+  "alias": "AnalyticsWebPart",
+  "componentType": "WebPart",
+
+  "version": "*",
+  "manifestVersion": 2,
+
+  "requiresCustomScript": false,
+  "supportedHosts": ["SharePointWebPart", "TeamsPersonalApp", "TeamsTab", "SharePointFullPage"],
+  "supportsThemeVariants": true,
+  "supportsFullBleed": true,
+
+  "preconfiguredEntries": [{
+    "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
+    "group": { "default": "Outros" },
+    "title": { "default": "Dashboard — Biblioteca de Prompts" },
+    "description": { "default": "Ranking de contribuidores e prompts mais favoritados" },
+    "officeFabricIconFontName": "BarChartVertical",
+    "properties": {
+      "targetListTitle": "Biblioteca de Prompts",
+      "favoritesListTitle": "⭐ Meus Favoritos",
+      "promptIdField": "PromptID",
+      "topN": 10
+    }
+  }]
+}

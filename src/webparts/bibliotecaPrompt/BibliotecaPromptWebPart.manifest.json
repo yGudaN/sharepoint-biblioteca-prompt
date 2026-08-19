@@ -1,0 +1,30 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
+
+  "id": "c8e4a1f2-7b3d-4e9a-8f5c-6d2b1a9e3f4c",
+  "alias": "BibliotecaPromptWebPart",
+  "componentType": "WebPart",
+
+  "version": "*",
+  "manifestVersion": 2,
+
+  "requiresCustomScript": false,
+  "supportedHosts": ["SharePointWebPart", "TeamsPersonalApp", "TeamsTab", "SharePointFullPage"],
+  "supportsThemeVariants": true,
+  "supportsFullBleed": true,
+
+  "preconfiguredEntries": [{
+    "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
+    "group": { "default": "Outros" },
+    "title": { "default": "Biblioteca de Prompts" },
+    "description": { "default": "Biblioteca de prompts com favoritos por usuário" },
+    "officeFabricIconFontName": "PageAdd",
+    "properties": {
+      "targetListTitle": "Biblioteca de Prompts",
+      "favoritesListTitle": "⭐ Meus Favoritos",
+      "promptIdField": "PromptID",
+      "copyFields": "A_x00e7__x00e3_o,Prompt,Categoria,Categoria0,Funcionacom",
+      "extraToolColors": ""
+    }
+  }]
+}

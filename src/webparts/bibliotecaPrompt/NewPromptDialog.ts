@@ -1,4 +1,5 @@
 import { BaseDialog, IDialogConfiguration } from '@microsoft/sp-dialog';
+import { IPromptChoices, DEFAULT_PROMPT_CHOICES } from './promptChoices';
 
 export interface INewPromptData {
   titulo: string;
@@ -8,11 +9,6 @@ export interface INewPromptData {
   categoria: string;
   funcionaCom: string;
 }
-
-const ACOES = ['Analisar', 'Perguntar', 'Resumir', 'Criar', 'Encontrar', 'Aprender', 'Otimizar', 'Se preparar', 'Entender'];
-const SEGMENTOS = ['Comercial', 'DP', 'Financeiro', 'Infra', 'Projetos', 'RH', 'Analista Funcional', 'Desenvolvedor(a)', 'Gerente de Projetos'];
-const CATEGORIAS = ['Área', 'Função'];
-const FUNCIONA_COM = ['Outlook', 'Teams', 'OneNote', 'Word', 'Excel', 'PowerPoint', 'Power BI', 'M365 Copilot', 'Copilot Studio', 'D365 CCaaS / Customer Service', 'D365 Customer Insights - Journeys', 'D365 Sales', 'Fabric', 'Power Apps', 'Power Automate', 'Power Pages', 'Whiteboard'];
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
@@ -24,11 +20,35 @@ function optionsHtml(items: string[]): string {
 
 export default class NewPromptDialog extends BaseDialog {
   public result: INewPromptData | undefined;
+  private _choices: IPromptChoices;
+  private _theme: 'light' | 'dark';
+
+  constructor(choices?: IPromptChoices, theme: 'light' | 'dark' = 'light') {
+    super();
+    this._choices = choices || DEFAULT_PROMPT_CHOICES;
+    this._theme = theme;
+  }
 
   public render(): void {
     this.domElement.innerHTML = `
       <style>
         .np-wrap {
+          --np-surface: #ffffff;
+          --np-surface-alt: #faf9f8;
+          --np-hover: #f3f2f1;
+          --np-text: #323130;
+          --np-text-2: #605e5c;
+          --np-text-3: #a19f9d;
+          --np-border: #edebe9;
+          --np-border-2: #c8c6c4;
+          --np-border-3: #8a8886;
+          --np-primary: #0078d4;
+          --np-primary-h: #106ebe;
+          --np-on-primary: #ffffff;
+          --np-danger: #a4262c;
+          --np-focus-ring: rgba(0, 120, 212, 0.2);
+          --np-arrow: '%23605e5c';
+
           font-family: 'Segoe UI', sans-serif;
           display: flex;
           flex-direction: column;
@@ -37,14 +57,32 @@ export default class NewPromptDialog extends BaseDialog {
           height: 80vh;
           max-height: 720px;
           box-sizing: border-box;
-          background: #fff;
+          background: var(--np-surface);
+          color: var(--np-text);
+        }
+        .np-wrap.np-dark {
+          --np-surface: #2b2b2b;
+          --np-surface-alt: #262626;
+          --np-hover: #3b3a39;
+          --np-text: #f3f2f1;
+          --np-text-2: #c8c6c4;
+          --np-text-3: #8a8886;
+          --np-border: #3b3a39;
+          --np-border-2: #605e5c;
+          --np-border-3: #8a8886;
+          --np-primary: #4cb2ff;
+          --np-primary-h: #6cc0ff;
+          --np-on-primary: #1f1f1f;
+          --np-danger: #f1707b;
+          --np-focus-ring: rgba(76, 178, 255, 0.35);
+          --np-arrow: '%23c8c6c4';
         }
         .np-header {
           padding: 20px 24px 16px;
-          border-bottom: 1px solid #edebe9;
+          border-bottom: 1px solid var(--np-border);
           flex-shrink: 0;
         }
-        .np-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: #323130; }
+        .np-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--np-text); }
         .np-body {
           flex: 1;
           overflow-y: auto;
@@ -56,44 +94,44 @@ export default class NewPromptDialog extends BaseDialog {
           align-items: center;
           gap: 8px;
           padding: 14px 24px;
-          border-top: 1px solid #edebe9;
+          border-top: 1px solid var(--np-border);
           flex-shrink: 0;
-          background: #faf9f8;
+          background: var(--np-surface-alt);
         }
         .np-field { margin-bottom: 16px; }
         .np-label {
           display: block;
           font-weight: 600;
           margin-bottom: 6px;
-          color: #323130;
+          color: var(--np-text);
           font-size: 13px;
         }
-        .np-label .np-req { color: #a4262c; margin-left: 2px; }
+        .np-label .np-req { color: var(--np-danger); margin-left: 2px; }
         .np-field input[type="text"],
         .np-field select,
         .np-field textarea {
           width: 100%;
           padding: 8px 12px;
           box-sizing: border-box;
-          border: 1px solid #c8c6c4;
+          border: 1px solid var(--np-border-2);
           border-radius: 8px;
           font-family: inherit;
           font-size: 14px;
-          color: #323130;
-          background: #fff;
+          color: var(--np-text);
+          background: var(--np-surface);
           transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
         .np-field input[type="text"]:hover,
         .np-field select:hover,
         .np-field textarea:hover {
-          border-color: #a19f9d;
+          border-color: var(--np-text-3);
         }
         .np-field input[type="text"]:focus,
         .np-field select:focus,
         .np-field textarea:focus {
           outline: none;
-          border-color: #0078d4;
-          box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+          border-color: var(--np-primary);
+          box-shadow: 0 0 0 2px var(--np-focus-ring);
         }
         .np-field textarea {
           min-height: 140px;
@@ -108,7 +146,10 @@ export default class NewPromptDialog extends BaseDialog {
           background-position: right 12px center;
           padding-right: 32px;
         }
-        .np-error { color: #a4262c; font-size: 12px; margin-top: 4px; display: none; }
+        .np-wrap.np-dark .np-field select {
+          background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3e%3cpath fill='%23c8c6c4' d='M6 8L0 2l1.4-1.4L6 5.2 10.6.6 12 2z'/%3e%3c/svg%3e");
+        }
+        .np-error { color: var(--np-danger); font-size: 12px; margin-top: 4px; display: none; }
         .np-btn {
           padding: 8px 22px;
           border: 1px solid transparent;
@@ -119,15 +160,15 @@ export default class NewPromptDialog extends BaseDialog {
           font-weight: 600;
           transition: background-color 0.15s ease, border-color 0.15s ease;
         }
-        .np-btn.primary { background: #0078d4; color: #fff; }
-        .np-btn.primary:hover { background: #106ebe; }
-        .np-btn.primary:disabled { background: #a19f9d; cursor: not-allowed; }
-        .np-btn.secondary { background: #fff; border-color: #8a8886; color: #323130; }
-        .np-btn.secondary:hover { background: #f3f2f1; }
-        .np-status { font-size: 13px; margin-right: auto; color: #605e5c; }
-        .np-status.error { color: #a4262c; }
+        .np-btn.primary { background: var(--np-primary); color: var(--np-on-primary); }
+        .np-btn.primary:hover { background: var(--np-primary-h); }
+        .np-btn.primary:disabled { background: var(--np-text-3); cursor: not-allowed; }
+        .np-btn.secondary { background: var(--np-surface); border-color: var(--np-border-3); color: var(--np-text); }
+        .np-btn.secondary:hover { background: var(--np-hover); }
+        .np-status { font-size: 13px; margin-right: auto; color: var(--np-text-2); }
+        .np-status.error { color: var(--np-danger); }
       </style>
-      <div class="np-wrap">
+      <div class="np-wrap${this._theme === 'dark' ? ' np-dark' : ''}">
         <div class="np-header">
           <h2>Novo prompt</h2>
         </div>
@@ -140,7 +181,7 @@ export default class NewPromptDialog extends BaseDialog {
 
           <div class="np-field">
             <label class="np-label" for="np-acao">Ação<span class="np-req">*</span></label>
-            <select id="np-acao" name="acao">${optionsHtml(ACOES)}</select>
+            <select id="np-acao" name="acao">${optionsHtml(this._choices.acoes)}</select>
             <div class="np-error" data-for="acao">Selecione uma ação.</div>
           </div>
 
@@ -152,19 +193,19 @@ export default class NewPromptDialog extends BaseDialog {
 
           <div class="np-field">
             <label class="np-label" for="np-segmento">Segmento<span class="np-req">*</span></label>
-            <select id="np-segmento" name="segmento">${optionsHtml(SEGMENTOS)}</select>
+            <select id="np-segmento" name="segmento">${optionsHtml(this._choices.segmentos)}</select>
             <div class="np-error" data-for="segmento">Selecione um segmento.</div>
           </div>
 
           <div class="np-field">
             <label class="np-label" for="np-categoria">Categoria<span class="np-req">*</span></label>
-            <select id="np-categoria" name="categoria">${optionsHtml(CATEGORIAS)}</select>
+            <select id="np-categoria" name="categoria">${optionsHtml(this._choices.categorias)}</select>
             <div class="np-error" data-for="categoria">Selecione uma categoria.</div>
           </div>
 
           <div class="np-field">
             <label class="np-label" for="np-funcionaCom">Funciona com<span class="np-req">*</span></label>
-            <select id="np-funcionaCom" name="funcionaCom">${optionsHtml(FUNCIONA_COM)}</select>
+            <select id="np-funcionaCom" name="funcionaCom">${optionsHtml(this._choices.funcionaCom)}</select>
             <div class="np-error" data-for="funcionaCom">Selecione uma opção.</div>
           </div>
         </form>

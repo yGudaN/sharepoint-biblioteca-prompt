@@ -1,22 +1,21 @@
 {
   "@microsoft/generator-sharepoint": {
     "whichFolder": "subdir",
-    "solutionName": "listbutton",
+    "solutionName": "sharepoint-biblioteca-prompt",
     "environment": "spo",
     "packageManager": "npm",
     "useGulp": false,
-    "componentType": "extension",
-    "extensionType": "ListViewCommandSet",
+    "componentType": "webpart",
     "template": "none",
-    "componentName": "ListButton",
+    "componentName": "BibliotecaPrompt",
     "plusBeta": false,
     "isCreatingSolution": true,
     "nodeVersion": "22.17.1",
     "sdksVersions": {},
     "version": "1.23.2",
-    "libraryName": "listbutton",
-    "libraryId": "df9061d4-5751-41e4-867f-a18c78274f66",
-    "solutionShortDescription": "listbutton description",
+    "libraryName": "sharepoint-biblioteca-prompt",
+    "libraryId": "a5f2c8b3-9d4e-4a1f-b6c7-1e2d3f4a5b6c",
+    "solutionShortDescription": "Biblioteca de Prompts para SharePoint",
     "skipFeatureDeployment": true,
     "isDomainIsolated": false
   }

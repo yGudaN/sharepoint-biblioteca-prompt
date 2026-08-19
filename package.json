@@ -15,7 +15,9 @@
     "tslib": "2.3.1",
     "@microsoft/sp-core-library": "1.23.2",
     "@microsoft/decorators": "1.23.2",
-    "@microsoft/sp-listview-extensibility": "1.23.2",
+    "@microsoft/sp-webpart-base": "1.23.2",
+    "@microsoft/sp-property-pane": "1.23.2",
+    "@microsoft/sp-http": "1.23.2",
     "@microsoft/sp-dialog": "1.23.2"
   },
   "devDependencies": {

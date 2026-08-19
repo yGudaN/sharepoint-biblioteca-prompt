@@ -2,17 +2,26 @@
   "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
   "version": "2.0",
   "bundles": {
-    "list-button-command-set": {
+    "biblioteca-prompt-web-part": {
       "components": [
         {
-          "entrypoint": "./lib/extensions/listButton/ListButtonCommandSet.js",
-          "manifest": "./src/extensions/listButton/ListButtonCommandSet.manifest.json"
+          "entrypoint": "./lib/webparts/bibliotecaPrompt/BibliotecaPromptWebPart.js",
+          "manifest": "./src/webparts/bibliotecaPrompt/BibliotecaPromptWebPart.manifest.json"
+        }
+      ]
+    },
+    "analytics-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/analytics/AnalyticsWebPart.js",
+          "manifest": "./src/webparts/analytics/AnalyticsWebPart.manifest.json"
         }
       ]
     }
   },
   "externals": {},
   "localizedResources": {
-    "ListButtonCommandSetStrings": "lib/extensions/listButton/loc/{locale}.js"
+    "BibliotecaPromptWebPartStrings": "lib/webparts/bibliotecaPrompt/loc/{locale}.js",
+    "AnalyticsWebPartStrings": "lib/webparts/analytics/loc/{locale}.js"
   }
 }

@@ -1,9 +1,9 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
   "solution": {
-    "name": "sharepoint-biblioteca-prompt-client-side-solution",
-    "id": "df9061d4-5751-41e4-867f-a18c78274f66",
-    "version": "1.0.0.0",
+    "name": "sharepoint-biblioteca-prompt-webpart",
+    "id": "a5f2c8b3-9d4e-4a1f-b6c7-1e2d3f4a5b6c",
+    "version": "1.1.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,
@@ -27,16 +27,10 @@
     },
     "features": [
       {
-        "title": "Application Extension - Deployment of custom action",
-        "description": "Deploys a custom action with ClientSideComponentId association",
-        "id": "299ca275-1569-4a96-9ca4-f0049f61c83c",
-        "version": "1.0.0.0",
-        "assets": {
-          "elementManifests": [
-            "elements.xml",
-            "ClientSideInstance.xml"
-          ]
-        }
+        "title": "Biblioteca de Prompts - Web Part",
+        "description": "Web Part que renderiza a biblioteca de prompts com favoritos por usuário",
+        "id": "b4e1d7a2-8c5f-4d3a-9e6b-2f1c8d5e4b7a",
+        "version": "1.1.0.0"
       }
     ]
   },
