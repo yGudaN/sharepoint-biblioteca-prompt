@@ -174,13 +174,15 @@ O PnP PowerShell precisa de um "App Registration" no Entra ID do tenant do clien
 No PowerShell 7, rode (troca o nome do tenant):
 
 ```powershell
-Register-PnPEntraIDAppForInteractiveLogin -ApplicationName "PnP PowerShell - Biblioteca de Prompts" -Tenant "SEU_TENANT.onmicrosoft.com"
+Register-PnPEntraIDAppForInteractiveLogin -ApplicationName "PnP PowerShell - Biblioteca de Prompts" -Tenant "SEU_TENANT.onmicrosoft.com" -SharePointDelegatePermissions "AllSites.FullControl" -GraphDelegatePermissions "User.Read"
 ```
+
+> 💡 **Por que passar permissões explícitas?** Sem elas, o cmdlet registra várias permissões do Graph que a gente não precisa (Directory.Read, Group.Read etc.). Passando `AllSites.FullControl` (SharePoint) e `User.Read` (Graph), o admin do cliente aprova só o **mínimo necessário** — mais rápido de aprovar e mais seguro.
 
 > 💡 **Onde acho o "SEU_TENANT"?** É o prefixo do endereço do SharePoint. Se o site é `https://empresax.sharepoint.com/...`, o tenant é `empresax`.
 
 Vai:
-1. Abrir uma janela de login → faça login com conta **admin do tenant**
+1. Abrir uma janela de login → faça login com conta que tenha permissão de criar app registrations no tenant (normalmente conta admin)
 2. Mostrar uma tela pedindo permissões (SharePoint + Graph) → **Aceite**
 3. Voltar pro terminal com um `ClientId` no output. Tipo:
    ```
@@ -194,6 +196,25 @@ Guarde ele numa variável de ambiente pra não precisar digitar toda hora:
 [Environment]::SetEnvironmentVariable("PNP_CLIENT_ID", "12345678-1234-1234-1234-123456789012", "User")
 ```
 (depois feche e reabra o PowerShell)
+
+#### ⚠️ Se você NÃO é admin do tenant
+
+Se você é apenas usuário do tenant (com acesso a criar sites/listas, mas sem ser Global Admin), duas coisas podem acontecer:
+
+**1. O comando cria a app mas não consegue aprovar as permissões**
+
+Você vai receber o ClientId, mas quando tentar rodar os scripts vai dar erro de permissão. Nesse caso:
+- Vá no Portal Entra do tenant: https://entra.microsoft.com → **Applications** → **App registrations** → encontre sua app.
+- Aba **API permissions** → clique em **"Request admin consent"** (ou algum botão similar). Isso envia uma solicitação pro admin.
+- Ou peça diretamente ao admin: "Preciso que você aprove essa app: `PnP PowerShell - Biblioteca de Prompts`. As permissões são `AllSites.FullControl` (SharePoint) e `User.Read` (Graph)."
+- Assim que ele clicar em **"Grant admin consent"**, a app tá liberada. Você não precisa fazer nada do seu lado — mesmo ClientId, mesma app, funciona.
+
+**2. Ainda de olho: `Set-PnPSite -SocialBarOnSitePagesDisabled $true`**
+
+Esse comando específico precisa que **sua conta** seja **Site Collection Administrator** do site (não Global Admin do tenant, só do site em si). Peça pro admin do site te adicionar em:
+- Site → Engrenagem ⚙️ → **Site permissions** → **Site collection administrators** → adicionar seu usuário.
+
+Com esses dois liberados (admin consent + site collection admin), você roda todos os scripts do repositório autonomamente.
 
 ### Passo 2 — Criar as listas no site do cliente
 
@@ -431,6 +452,12 @@ Você tá tentando usar o parâmetro `-Interactive` no `Register-PnPEntraIDAppFo
 
 ### Backtick (`` ` ``) somindo em comandos copiados
 Cola tudo em uma linha só, sem quebra. O backtick é frágil no copy-paste.
+
+### Erro `Insufficient privileges` ao rodar os scripts com ClientId
+A app foi criada mas as permissões ainda não foram aprovadas pelo admin. Você tem duas coisas pra checar:
+
+1. **Admin consent das permissões da app** — vai no Portal Entra → App registrations → sua app → **API permissions**. Cada permissão deve estar com status 🟢 **Granted for `<tenant>`**. Se estiver 🟡 **Not granted**, peça pro admin clicar em **Grant admin consent**.
+2. **Sua conta como Site Collection Admin** (só necessário se for rodar `Set-PnPSite -SocialBarOnSitePagesDisabled`). Vá no site → engrenagem ⚙️ → **Site permissions** → **Site collection administrators** → adicione seu usuário. Se você não puder fazer isso, peça pro admin do site.
 
 ---
 
