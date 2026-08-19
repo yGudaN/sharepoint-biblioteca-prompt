@@ -50,6 +50,7 @@ export default class NewPromptDialog extends BaseDialog {
           --np-arrow: '%23605e5c';
 
           font-family: 'Segoe UI', sans-serif;
+          color-scheme: light;
           display: flex;
           flex-direction: column;
           width: 560px;
@@ -76,6 +77,7 @@ export default class NewPromptDialog extends BaseDialog {
           --np-danger: #f1707b;
           --np-focus-ring: rgba(76, 178, 255, 0.35);
           --np-arrow: '%23c8c6c4';
+          color-scheme: dark;
         }
         .np-header {
           padding: 20px 24px 16px;

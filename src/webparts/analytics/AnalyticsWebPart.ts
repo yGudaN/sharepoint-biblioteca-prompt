@@ -108,6 +108,7 @@ export default class AnalyticsWebPart extends BaseClientSideWebPart<IAnalyticsWe
           --an-shadow: rgba(0, 0, 0, 0.08);
 
           font-family: 'Segoe UI', sans-serif;
+          color-scheme: light;
           color: var(--an-text);
           background: var(--an-bg);
           padding: 12px;
@@ -117,6 +118,7 @@ export default class AnalyticsWebPart extends BaseClientSideWebPart<IAnalyticsWe
           transition: background 0.2s ease, color 0.2s ease;
         }
         .an-wrap.an-dark {
+          color-scheme: dark;
           --an-bg: #1f1f1f;
           --an-surface: #2b2b2b;
           --an-surface-alt: #262626;

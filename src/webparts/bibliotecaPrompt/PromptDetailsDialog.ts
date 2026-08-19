@@ -57,6 +57,7 @@ export default class PromptDetailsDialog extends BaseDialog {
           --pd-danger: #a4262c;
           --pd-focus-ring: rgba(0, 120, 212, 0.2);
 
+          color-scheme: light;
           font-family: 'Segoe UI', sans-serif;
           display: flex; flex-direction: column;
           width: 560px; max-width: 90vw; height: 80vh; max-height: 720px;
@@ -77,6 +78,7 @@ export default class PromptDetailsDialog extends BaseDialog {
           --pd-on-primary: #1f1f1f;
           --pd-danger: #f1707b;
           --pd-focus-ring: rgba(76, 178, 255, 0.35);
+          color-scheme: dark;
         }
         .pd-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid var(--pd-border); flex-shrink: 0; }
         .pd-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--pd-text); }
@@ -93,7 +95,13 @@ export default class PromptDetailsDialog extends BaseDialog {
         .pd-field input[type="text"]:hover:not(:disabled), .pd-field select:hover:not(:disabled), .pd-field textarea:hover:not(:disabled) { border-color: var(--pd-text-3); }
         .pd-field input[type="text"]:focus, .pd-field select:focus, .pd-field textarea:focus {
           outline: none; border-color: var(--pd-primary); box-shadow: 0 0 0 2px var(--pd-focus-ring);
-        }
+        }-color: var(--pd-surface-alt);
+          background-image: none;
+          color: var(--pd-text);
+          -webkit-text-fill-color: var(--pd-text);
+          opacity: 1;
+          cursor: default;
+         
         .pd-field input:disabled, .pd-field select:disabled, .pd-field textarea:disabled {
           background: var(--pd-surface-alt); color: var(--pd-text); opacity: 1; cursor: default; border-color: var(--pd-border);
         }
@@ -114,6 +122,25 @@ export default class PromptDetailsDialog extends BaseDialog {
         .pd-btn.secondary { background: var(--pd-surface); border-color: var(--pd-border-3); color: var(--pd-text); }
         .pd-btn.secondary:hover { background: var(--pd-hover); }
         .pd-mode-badge { font-size: 12px; padding: 2px 10px; border-radius: 12px; background: var(--pd-border); color: var(--pd-text-2); font-weight: 600; }
+        .pd-label-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+        .pd-label-row .pd-label { margin-bottom: 0; }
+        .pd-copy-btn {
+          background: transparent;
+          border: 1px solid var(--pd-border-2);
+          color: var(--pd-text-2);
+          border-radius: 4px;
+          padding: 3px 8px;
+          cursor: pointer;
+          font-size: 12px;
+          font-family: inherit;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        }
+        .pd-copy-btn:hover { background: var(--pd-hover); color: var(--pd-text); }
+        .pd-copy-btn.copied { background: #dff6dd; color: #107c10; border-color: #107c10; }
+        .pd-wrap.pd-dark .pd-copy-btn.copied { background: rgba(107, 183, 0, 0.15); color: #6bb700; border-color: #6bb700; }
       </style>
       <div class="pd-wrap${this._theme === 'dark' ? ' pd-dark' : ''}">
         <div class="pd-header">
@@ -132,7 +159,10 @@ export default class PromptDetailsDialog extends BaseDialog {
             <div class="pd-error" data-for="acao">Selecione uma ação.</div>
           </div>
           <div class="pd-field">
-            <label class="pd-label" for="pd-prompt">Prompt<span class="pd-req">*</span></label>
+            <div class="pd-label-row">
+              <label class="pd-label" for="pd-prompt">Prompt<span class="pd-req">*</span></label>
+              <button type="button" class="pd-copy-btn" id="pd-copy-prompt" title="Copiar prompt">📋 Copiar</button>
+            </div>
             <textarea id="pd-prompt" disabled>${escapeHtml(d.prompt)}</textarea>
             <div class="pd-error" data-for="prompt">Informe o prompt.</div>
           </div>
@@ -175,6 +205,39 @@ export default class PromptDetailsDialog extends BaseDialog {
       this.result = data;
       this.close().catch(() => { /* noop */ });
     });
+    (root.querySelector('#pd-copy-prompt') as HTMLButtonElement).addEventListener('click', (ev) => {
+      ev.preventDefault();
+      this._copyPromptText(ev.currentTarget as HTMLButtonElement);
+    });
+  }
+
+  private _copyPromptText(btn: HTMLButtonElement): void {
+    const textarea = this.domElement.querySelector('#pd-prompt') as HTMLTextAreaElement | null;
+    const text = textarea ? textarea.value : '';
+    const done = (): void => {
+      btn.textContent = '✓ Copiado';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = '📋 Copiar';
+        btn.classList.remove('copied');
+      }, 1500);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done).catch(() => this._fallbackCopy(text, done));
+    } else {
+      this._fallbackCopy(text, done);
+    }
+  }
+
+  private _fallbackCopy(text: string, done: () => void): void {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch { /* noop */ }
+    document.body.removeChild(ta);
   }
 
   private _syncMode(): void {

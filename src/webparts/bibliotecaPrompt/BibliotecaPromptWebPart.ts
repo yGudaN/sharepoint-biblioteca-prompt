@@ -166,6 +166,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
           --bp-focus-ring: rgba(0, 120, 212, 0.2);
 
           font-family: 'Segoe UI', sans-serif;
+          color-scheme: light;
           color: var(--bp-text);
           background: var(--bp-bg);
           padding: 16px;
@@ -175,6 +176,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
           transition: background 0.2s ease, color 0.2s ease;
         }
         .bp-wrap.bp-dark {
+          color-scheme: dark;
           --bp-bg: #1f1f1f;
           --bp-surface: #2b2b2b;
           --bp-surface-alt: #262626;
