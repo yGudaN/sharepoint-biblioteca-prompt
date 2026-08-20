@@ -30,14 +30,81 @@ export default class PromptDetailsDialog extends BaseDialog {
   private _choices: IPromptChoices;
   private _theme: 'light' | 'dark';
   private _readOnly: boolean;
-  private _editing: boolean = false;
+  private _authorName: string;
+  private _blockOutside: ((ev: Event) => void) | undefined;
+  private _focusGuardOut: ((ev: FocusEvent) => void) | undefined;
+  private _focusGuardIn: ((ev: FocusEvent) => void) | undefined;
+  private _lastFocused: HTMLElement | undefined;
+  private _cleanupDone: boolean = false;
 
-  constructor(initial: IPromptDetailsData, choices?: IPromptChoices, theme: 'light' | 'dark' = 'light', readOnly: boolean = false) {
+  constructor(initial: IPromptDetailsData, choices?: IPromptChoices, theme: 'light' | 'dark' = 'light', readOnly: boolean = false, authorName: string = '') {
     super();
     this._initial = initial;
     this._choices = choices || DEFAULT_PROMPT_CHOICES;
     this._theme = theme;
     this._readOnly = readOnly;
+    this._authorName = authorName;
+  }
+
+  public onBeforeClose(): Promise<void> {
+    this._cleanupBlocker();
+    return Promise.resolve();
+  }
+
+  public close(): Promise<void> {
+    this._cleanupBlocker();
+    return super.close();
+  }
+
+  private _cleanupBlocker(): void {
+    if (this._cleanupDone) return;
+    this._cleanupDone = true;
+    if (this._blockOutside) {
+      document.removeEventListener('mousedown', this._blockOutside, true);
+      document.removeEventListener('pointerdown', this._blockOutside, true);
+      this._blockOutside = undefined;
+    }
+    if (this._focusGuardOut) {
+      document.removeEventListener('focusout', this._focusGuardOut, true);
+      this._focusGuardOut = undefined;
+    }
+    if (this._focusGuardIn) {
+      document.removeEventListener('focusin', this._focusGuardIn, true);
+      this._focusGuardIn = undefined;
+    }
+    this._lastFocused = undefined;
+  }
+
+  private _installFocusGuard(root: HTMLElement): void {
+    // Estratégia dupla: bloqueia scripts que roubam foco + restaura foco se escapar.
+    this._blockOutside = (ev: Event) => {
+      if (root.contains(ev.target as Node)) ev.stopImmediatePropagation();
+    };
+    document.addEventListener('mousedown', this._blockOutside, true);
+    document.addEventListener('pointerdown', this._blockOutside, true);
+
+    // Rastreia último foco dentro do dialog
+    this._focusGuardIn = (ev: FocusEvent) => {
+      const tgt = ev.target as HTMLElement;
+      if (root.contains(tgt) && tgt !== root) this._lastFocused = tgt;
+    };
+    document.addEventListener('focusin', this._focusGuardIn, true);
+
+    // Se foco sair do dialog para fora, devolve para o último elemento focado dentro
+    this._focusGuardOut = (ev: FocusEvent) => {
+      const wentTo = ev.relatedTarget as HTMLElement | null;
+      const wasIn = root.contains(ev.target as Node);
+      if (!wasIn) return;
+      if (wentTo && root.contains(wentTo)) return;
+      const restore = this._lastFocused;
+      if (!restore || !root.contains(restore)) return;
+      setTimeout(() => {
+        if (this._lastFocused === restore && document.contains(restore) && root.contains(restore)) {
+          restore.focus();
+        }
+      }, 0);
+    };
+    document.addEventListener('focusout', this._focusGuardOut, true);
   }
 
   public render(): void {
@@ -85,6 +152,8 @@ export default class PromptDetailsDialog extends BaseDialog {
         }
         .pd-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid var(--pd-border); flex-shrink: 0; }
         .pd-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--pd-text); }
+        .pd-header-title { flex: 1; min-width: 0; }
+        .pd-author { font-size: 13px; color: var(--pd-text-2); margin-top: 2px; }
         .pd-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
         .pd-footer { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 14px 24px; border-top: 1px solid var(--pd-border); flex-shrink: 0; background: var(--pd-surface-alt); }
         .pd-field { margin-bottom: 16px; }
@@ -157,18 +226,21 @@ export default class PromptDetailsDialog extends BaseDialog {
       </style>
       <div class="pd-wrap${this._theme === 'dark' ? ' pd-dark' : ''}">
         <div class="pd-header">
-          <h2 id="pd-title-mode">Detalhes do prompt</h2>
-          <span class="pd-mode-badge" id="pd-mode-badge">Somente leitura</span>
+          <div class="pd-header-title">
+            <h2>${this._readOnly ? 'Detalhes do prompt' : 'Editar prompt'}</h2>
+            ${this._authorName ? `<div class="pd-author">Por ${escapeHtml(this._authorName)}</div>` : ''}
+          </div>
+          <span class="pd-mode-badge">${this._readOnly ? 'Somente leitura' : 'Edição'}</span>
         </div>
         <form id="pd-form" class="pd-body" novalidate>
           <div class="pd-field">
             <label class="pd-label" for="pd-titulo">Título<span class="pd-req">*</span></label>
-            <input type="text" id="pd-titulo" maxlength="255" value="${escapeHtml(d.titulo)}" disabled />
+            <input type="text" id="pd-titulo" maxlength="255" value="${escapeHtml(d.titulo)}"${this._readOnly ? ' disabled' : ''} />
             <div class="pd-error" data-for="titulo">Informe o título.</div>
           </div>
           <div class="pd-field">
             <label class="pd-label" for="pd-acao">Ação<span class="pd-req">*</span></label>
-            <select id="pd-acao" disabled>${optionsHtml(this._choices.acoes, d.acao)}</select>
+            <select id="pd-acao"${this._readOnly ? ' disabled' : ''}>${optionsHtml(this._choices.acoes, d.acao)}</select>
             <div class="pd-error" data-for="acao">Selecione uma ação.</div>
           </div>
           <div class="pd-field">
@@ -176,43 +248,38 @@ export default class PromptDetailsDialog extends BaseDialog {
               <label class="pd-label" for="pd-prompt">Prompt<span class="pd-req">*</span></label>
               <button type="button" class="pd-copy-btn" id="pd-copy-prompt" title="Copiar prompt">📋 Copiar</button>
             </div>
-            <textarea id="pd-prompt" disabled>${escapeHtml(d.prompt)}</textarea>
+            <textarea id="pd-prompt"${this._readOnly ? ' disabled' : ''}>${escapeHtml(d.prompt)}</textarea>
             <div class="pd-error" data-for="prompt">Informe o prompt.</div>
           </div>
           <div class="pd-field">
             <label class="pd-label" for="pd-segmento">Segmento<span class="pd-req">*</span></label>
-            <select id="pd-segmento" disabled>${optionsHtml(this._choices.segmentos, d.segmento)}</select>
+            <select id="pd-segmento"${this._readOnly ? ' disabled' : ''}>${optionsHtml(this._choices.segmentos, d.segmento)}</select>
             <div class="pd-error" data-for="segmento">Selecione um segmento.</div>
           </div>
           <div class="pd-field">
             <label class="pd-label" for="pd-categoria">Categoria<span class="pd-req">*</span></label>
-            <select id="pd-categoria" disabled>${optionsHtml(this._choices.categorias, d.categoria)}</select>
+            <select id="pd-categoria"${this._readOnly ? ' disabled' : ''}>${optionsHtml(this._choices.categorias, d.categoria)}</select>
             <div class="pd-error" data-for="categoria">Selecione uma categoria.</div>
           </div>
           <div class="pd-field">
             <label class="pd-label" for="pd-funcionaCom">Funciona com<span class="pd-req">*</span></label>
-            <select id="pd-funcionaCom" disabled>${optionsHtml(this._choices.funcionaCom, d.funcionaCom)}</select>
+            <select id="pd-funcionaCom"${this._readOnly ? ' disabled' : ''}>${optionsHtml(this._choices.funcionaCom, d.funcionaCom)}</select>
             <div class="pd-error" data-for="funcionaCom">Selecione uma opção.</div>
           </div>
         </form>
         <div class="pd-footer">
-          ${this._readOnly ? '' : '<button type="button" class="pd-btn danger" id="pd-deactivate" style="display:none" title="Excluir prompt">🗑️</button>'}
+          ${this._readOnly ? '' : '<button type="button" class="pd-btn danger" id="pd-deactivate" title="Excluir prompt">🗑️</button>'}
           <button type="button" class="pd-btn secondary" id="pd-close">Fechar</button>
-          ${this._readOnly ? '' : '<button type="button" class="pd-btn primary" id="pd-edit">Editar</button>'}
-          ${this._readOnly ? '' : '<button type="button" class="pd-btn primary" id="pd-save" style="display:none">Salvar</button>'}
+          ${this._readOnly ? '' : '<button type="button" class="pd-btn primary" id="pd-save">Salvar</button>'}
         </div>
       </div>
     `;
 
     const root = this.domElement;
+    this._installFocusGuard(root);
     (root.querySelector('#pd-close') as HTMLButtonElement).addEventListener('click', () => {
       this.result = undefined;
       this.close().catch(() => { /* noop */ });
-    });
-    const editBtn = root.querySelector('#pd-edit') as HTMLButtonElement | null;
-    if (editBtn) editBtn.addEventListener('click', () => {
-      this._editing = true;
-      this._syncMode();
     });
     const saveBtn = root.querySelector('#pd-save') as HTMLButtonElement | null;
     if (saveBtn) saveBtn.addEventListener('click', () => {
@@ -262,18 +329,6 @@ export default class PromptDetailsDialog extends BaseDialog {
     ta.select();
     try { document.execCommand('copy'); done(); } catch { /* noop */ }
     document.body.removeChild(ta);
-  }
-
-  private _syncMode(): void {
-    const root = this.domElement;
-    const fields = root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('#pd-titulo, #pd-acao, #pd-prompt, #pd-segmento, #pd-categoria, #pd-funcionaCom');
-    fields.forEach((f) => { f.disabled = !this._editing; });
-    (root.querySelector('#pd-title-mode') as HTMLElement).textContent = this._editing ? 'Editar prompt' : 'Detalhes do prompt';
-    (root.querySelector('#pd-mode-badge') as HTMLElement).textContent = this._editing ? 'Edição' : 'Somente leitura';
-    (root.querySelector('#pd-edit') as HTMLElement).style.display = this._editing ? 'none' : 'inline-block';
-    (root.querySelector('#pd-save') as HTMLElement).style.display = this._editing ? 'inline-block' : 'none';
-    const deactBtn = root.querySelector('#pd-deactivate') as HTMLElement | null;
-    if (deactBtn) deactBtn.style.display = this._editing ? 'inline-block' : 'none';
   }
 
   private _collectAndValidate(): IPromptDetailsData | undefined {

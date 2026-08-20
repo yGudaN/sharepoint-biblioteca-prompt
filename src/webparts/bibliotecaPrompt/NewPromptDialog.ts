@@ -22,11 +22,74 @@ export default class NewPromptDialog extends BaseDialog {
   public result: INewPromptData | undefined;
   private _choices: IPromptChoices;
   private _theme: 'light' | 'dark';
+  private _blockOutside: ((ev: Event) => void) | undefined;
+  private _focusGuardOut: ((ev: FocusEvent) => void) | undefined;
+  private _focusGuardIn: ((ev: FocusEvent) => void) | undefined;
+  private _lastFocused: HTMLElement | undefined;
+  private _cleanupDone: boolean = false;
 
   constructor(choices?: IPromptChoices, theme: 'light' | 'dark' = 'light') {
     super();
     this._choices = choices || DEFAULT_PROMPT_CHOICES;
     this._theme = theme;
+  }
+
+  public onBeforeClose(): Promise<void> {
+    this._cleanupBlocker();
+    return Promise.resolve();
+  }
+
+  public close(): Promise<void> {
+    this._cleanupBlocker();
+    return super.close();
+  }
+
+  private _cleanupBlocker(): void {
+    if (this._cleanupDone) return;
+    this._cleanupDone = true;
+    if (this._blockOutside) {
+      document.removeEventListener('mousedown', this._blockOutside, true);
+      document.removeEventListener('pointerdown', this._blockOutside, true);
+      this._blockOutside = undefined;
+    }
+    if (this._focusGuardOut) {
+      document.removeEventListener('focusout', this._focusGuardOut, true);
+      this._focusGuardOut = undefined;
+    }
+    if (this._focusGuardIn) {
+      document.removeEventListener('focusin', this._focusGuardIn, true);
+      this._focusGuardIn = undefined;
+    }
+    this._lastFocused = undefined;
+  }
+
+  private _installFocusGuard(root: HTMLElement): void {
+    this._blockOutside = (ev: Event) => {
+      if (root.contains(ev.target as Node)) ev.stopImmediatePropagation();
+    };
+    document.addEventListener('mousedown', this._blockOutside, true);
+    document.addEventListener('pointerdown', this._blockOutside, true);
+
+    this._focusGuardIn = (ev: FocusEvent) => {
+      const tgt = ev.target as HTMLElement;
+      if (root.contains(tgt) && tgt !== root) this._lastFocused = tgt;
+    };
+    document.addEventListener('focusin', this._focusGuardIn, true);
+
+    this._focusGuardOut = (ev: FocusEvent) => {
+      const wentTo = ev.relatedTarget as HTMLElement | null;
+      const wasIn = root.contains(ev.target as Node);
+      if (!wasIn) return;
+      if (wentTo && root.contains(wentTo)) return;
+      const restore = this._lastFocused;
+      if (!restore || !root.contains(restore)) return;
+      setTimeout(() => {
+        if (this._lastFocused === restore && document.contains(restore) && root.contains(restore)) {
+          restore.focus();
+        }
+      }, 0);
+    };
+    document.addEventListener('focusout', this._focusGuardOut, true);
   }
 
   public render(): void {
@@ -218,6 +281,9 @@ export default class NewPromptDialog extends BaseDialog {
         </div>
       </div>
     `;
+
+    const root = this.domElement;
+    this._installFocusGuard(root);
 
     const form = this.domElement.querySelector('#np-form') as HTMLFormElement;
     const cancelBtn = this.domElement.querySelector('#np-cancel') as HTMLButtonElement;

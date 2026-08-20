@@ -26,6 +26,8 @@ interface IPromptItem {
   Funcionacom?: string;
   A_x00e7__x00e3_o?: string;
   Ativo?: boolean;
+  AuthorId?: number;
+  Author?: { Title: string; EMail: string };
 }
 
 const FAV_FILLED = '#FFB900';
@@ -97,7 +99,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
   private _items: IPromptItem[] = [];
   private _favMap: Map<number, number> = new Map();
   private _search: string = '';
-  private _viewMode: 'all' | 'favorites' | 'app' | 'area' | 'funcao' = 'all';
+  private _viewMode: 'all' | 'favorites' | 'mine' | 'app' | 'area' | 'funcao' = 'all';
   private _pending: Set<number> = new Set();
   private _loaded: boolean = false;
   private _choices: IPromptChoices = DEFAULT_PROMPT_CHOICES;
@@ -417,6 +419,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
           <div class="bp-filters" data-role="filters">
             <button type="button" class="bp-filter" data-view="all">Todos</button>
             <button type="button" class="bp-filter" data-view="favorites">⭐ Favoritos</button>
+            <button type="button" class="bp-filter" data-view="mine">👤 Meus prompts</button>
             <button type="button" class="bp-filter" data-view="app">App</button>
             <button type="button" class="bp-filter" data-view="area">Área</button>
             <button type="button" class="bp-filter" data-view="funcao">Função</button>
@@ -451,7 +454,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
       const view = b.getAttribute('data-view');
       if (view === this._viewMode) b.classList.add('active');
       b.addEventListener('click', () => {
-        this._viewMode = (view as 'all' | 'favorites' | 'app' | 'area' | 'funcao') || 'all';
+        this._viewMode = (view as 'all' | 'favorites' | 'mine' | 'app' | 'area' | 'funcao') || 'all';
         filterBtns.forEach((x) => x.classList.toggle('active', x === b));
         this._renderRows();
       });
@@ -530,8 +533,8 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
   private _loadItems(): Promise<void> {
     const webUrl = this.context.pageContext.web.absoluteUrl;
     const list = encodeURIComponent(this.properties.targetListTitle);
-    const select = ['Id', 'Title', 'A_x00e7__x00e3_o', 'Prompt', 'Categoria', 'Categoria0', 'Funcionacom', 'Ativo'].join(',');
-    const url = `${webUrl}/_api/web/lists/getByTitle('${list}')/items?$select=${select}&$top=5000&$orderby=Title`;
+    const select = ['Id', 'Title', 'A_x00e7__x00e3_o', 'Prompt', 'Categoria', 'Categoria0', 'Funcionacom', 'Ativo', 'AuthorId', 'Author/Title'].join(',');
+    const url = `${webUrl}/_api/web/lists/getByTitle('${list}')/items?$select=${select}&$expand=Author&$top=5000&$orderby=Title`;
     return this.context.spHttpClient.get(url, SPHttpClient.configurations.v1)
       .then((r: SPHttpClientResponse) => {
         if (!r.ok) return r.text().then((t) => Promise.reject(new Error(`Falha ao carregar prompts (HTTP ${r.status}): ${t}`)));
@@ -569,8 +572,10 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
     const container = this.domElement.querySelector('[data-role="table-container"]') as HTMLElement | null;
     if (!container) return;
 
+    const uid = this._currentUserId();
     const filtered = this._items.filter((it) => {
       if (this._viewMode === 'favorites' && !this._favMap.has(it.Id)) return false;
+      if (this._viewMode === 'mine' && (uid === undefined || it.AuthorId !== uid)) return false;
       if (!this._search) return true;
       const hay = [it.Title, it.A_x00e7__x00e3_o, stripHtml(it.Prompt), it.Categoria, it.Categoria0, it.Funcionacom]
         .map((v) => (v || '').toString().toLowerCase())
@@ -581,7 +586,9 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
     if (filtered.length === 0) {
       const emptyMsg = this._viewMode === 'favorites'
         ? 'Você ainda não favoritou nenhum prompt.'
-        : 'Nenhum prompt encontrado.';
+        : this._viewMode === 'mine'
+          ? 'Você ainda não publicou nenhum prompt.'
+          : 'Nenhum prompt encontrado.';
       container.innerHTML = `<div class="bp-empty">${emptyMsg}</div>`;
       return;
     }
@@ -790,6 +797,10 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
       .catch((err) => this._showError(err));
   }
 
+  private _currentUserId(): number | undefined {
+    return (this.context.pageContext as unknown as { legacyPageContext?: { userId?: number } }).legacyPageContext?.userId;
+  }
+
   private _openDetails(item: IPromptItem): void {
     const initial: IPromptDetailsData = {
       titulo: item.Title || '',
@@ -799,7 +810,10 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
       categoria: item.Categoria0 || '',
       funcionaCom: item.Funcionacom || ''
     };
-    const dialog = new PromptDetailsDialog(initial, this._choices, this._theme);
+    const uid = this._currentUserId();
+    const isOwner = uid !== undefined && item.AuthorId === uid;
+    const authorName = item.Author?.Title || '';
+    const dialog = new PromptDetailsDialog(initial, this._choices, this._theme, !isOwner, authorName);
     dialog.show()
       .then(() => {
         if (dialog.deactivate) return this._deactivatePrompt(item.Id);

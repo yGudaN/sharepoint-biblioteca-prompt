@@ -405,7 +405,7 @@ export default class AnalyticsWebPart extends BaseClientSideWebPart<IAnalyticsWe
       categorias: initial.categoria ? [initial.categoria] : [],
       funcionaCom: initial.funcionaCom ? [initial.funcionaCom] : []
     };
-    const dialog = new PromptDetailsDialog(initial, choices, this._theme, true);
+    const dialog = new PromptDetailsDialog(initial, choices, this._theme, true, item.Author?.Title || '');
     dialog.show().catch((err) => this._showError(err));
   }
 
