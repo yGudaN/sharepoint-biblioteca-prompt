@@ -21,9 +21,9 @@ interface IPromptItem {
   Title: string;
   Created: string;
   Prompt?: string;
-  A_x00e7__x00e3_o?: string;
+  acao?: string;
+  Segmento?: string;
   Categoria?: string;
-  Categoria0?: string;
   Funcionacom?: string;
   AuthorId?: number;
   Author?: { Title: string; EMail: string };
@@ -251,7 +251,7 @@ export default class AnalyticsWebPart extends BaseClientSideWebPart<IAnalyticsWe
   private _loadItems(): Promise<void> {
     const webUrl = this.context.pageContext.web.absoluteUrl;
     const list = encodeURIComponent(this.properties.targetListTitle);
-    const select = ['Id', 'Title', 'Created', 'AuthorId', 'Prompt', 'A_x00e7__x00e3_o', 'Categoria', 'Categoria0', 'Funcionacom', 'Ativo', 'Author/Title', 'Author/EMail'].join(',');
+    const select = ['Id', 'Title', 'Created', 'AuthorId', 'Prompt', 'acao', 'Segmento', 'Categoria', 'Funcionacom', 'Ativo', 'Author/Title', 'Author/EMail'].join(',');
     const url = `${webUrl}/_api/web/lists/getByTitle('${list}')/items?$select=${select}&$expand=Author&$top=5000`;
     return this.context.spHttpClient.get(url, SPHttpClient.configurations.v1)
       .then((r: SPHttpClientResponse) => {
@@ -393,10 +393,10 @@ export default class AnalyticsWebPart extends BaseClientSideWebPart<IAnalyticsWe
   private _openDetails(item: IPromptItem): void {
     const initial: IPromptDetailsData = {
       titulo: item.Title || '',
-      acao: item.A_x00e7__x00e3_o || '',
+      acao: item.acao || '',
       prompt: stripHtml(item.Prompt),
-      segmento: item.Categoria || '',
-      categoria: item.Categoria0 || '',
+      segmento: item.Segmento || '',
+      categoria: item.Categoria || '',
       funcionaCom: item.Funcionacom || ''
     };
     const choices: IPromptChoices = {

@@ -21,10 +21,10 @@ interface IPromptItem {
   Id: number;
   Title: string;
   Prompt?: string;
+  Segmento?: string;
   Categoria?: string;
-  Categoria0?: string;
   Funcionacom?: string;
-  A_x00e7__x00e3_o?: string;
+  acao?: string;
   Ativo?: boolean;
   AuthorId?: number;
   Author?: { Title: string; EMail: string };
@@ -502,7 +502,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
   private _loadChoices(): Promise<void> {
     const webUrl = this.context.pageContext.web.absoluteUrl;
     const list = encodeURIComponent(this.properties.targetListTitle);
-    const filter = "InternalName eq 'A_x00e7__x00e3_o' or InternalName eq 'Categoria' or InternalName eq 'Categoria0' or InternalName eq 'Funcionacom'";
+    const filter = "InternalName eq 'acao' or InternalName eq 'Segmento' or InternalName eq 'Categoria' or InternalName eq 'Funcionacom'";
     const url = `${webUrl}/_api/web/lists/getByTitle('${list}')/fields?$filter=${encodeURIComponent(filter)}&$select=InternalName,Choices`;
     return this.context.spHttpClient.get(url, SPHttpClient.configurations.v1)
       .then((r: SPHttpClientResponse) => {
@@ -517,9 +517,9 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
         const pick = (k: string, fallback: string[]): string[] =>
           (byField[k] && byField[k].length ? byField[k] : fallback);
         this._choices = {
-          acoes: pick('A_x00e7__x00e3_o', DEFAULT_PROMPT_CHOICES.acoes),
-          segmentos: pick('Categoria', DEFAULT_PROMPT_CHOICES.segmentos),
-          categorias: pick('Categoria0', DEFAULT_PROMPT_CHOICES.categorias),
+          acoes: pick('acao', DEFAULT_PROMPT_CHOICES.acoes),
+          segmentos: pick('Segmento', DEFAULT_PROMPT_CHOICES.segmentos),
+          categorias: pick('Categoria', DEFAULT_PROMPT_CHOICES.categorias),
           funcionaCom: pick('Funcionacom', DEFAULT_PROMPT_CHOICES.funcionaCom)
         };
       })
@@ -533,7 +533,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
   private _loadItems(): Promise<void> {
     const webUrl = this.context.pageContext.web.absoluteUrl;
     const list = encodeURIComponent(this.properties.targetListTitle);
-    const select = ['Id', 'Title', 'A_x00e7__x00e3_o', 'Prompt', 'Categoria', 'Categoria0', 'Funcionacom', 'Ativo', 'AuthorId', 'Author/Title'].join(',');
+    const select = ['Id', 'Title', 'acao', 'Prompt', 'Segmento', 'Categoria', 'Funcionacom', 'Ativo', 'AuthorId', 'Author/Title'].join(',');
     const url = `${webUrl}/_api/web/lists/getByTitle('${list}')/items?$select=${select}&$expand=Author&$top=5000&$orderby=Title`;
     return this.context.spHttpClient.get(url, SPHttpClient.configurations.v1)
       .then((r: SPHttpClientResponse) => {
@@ -577,7 +577,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
       if (this._viewMode === 'favorites' && !this._favMap.has(it.Id)) return false;
       if (this._viewMode === 'mine' && (uid === undefined || it.AuthorId !== uid)) return false;
       if (!this._search) return true;
-      const hay = [it.Title, it.A_x00e7__x00e3_o, stripHtml(it.Prompt), it.Categoria, it.Categoria0, it.Funcionacom]
+      const hay = [it.Title, it.acao, stripHtml(it.Prompt), it.Segmento, it.Categoria, it.Funcionacom]
         .map((v) => (v || '').toString().toLowerCase())
         .join(' ');
       return hay.indexOf(this._search) >= 0;
@@ -598,7 +598,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
       const isFav = this._favMap.has(it.Id);
       const promptText = stripHtml(it.Prompt);
       const preview = promptText.length > PROMPT_PREVIEW_LEN ? promptText.substring(0, PROMPT_PREVIEW_LEN) + '…' : promptText;
-      const action = it.A_x00e7__x00e3_o || '';
+      const action = it.acao || '';
       const actionIcon = ACTION_ICON[action] || ACTION_ICON_DEFAULT;
       const tool = it.Funcionacom || '';
       const toolColor = extraColors[tool] || TOOL_COLOR[tool] || TOOL_COLOR_DEFAULT;
@@ -606,7 +606,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
         ? `<span class="bp-tool-name" title="${esc(tool)}" style="background:${toolColor}">${esc(tool)}</span>`
         : '';
       const borderStyle = tool ? `border-color:${toolColor};` : '';
-      const cat = it.Categoria || '';
+      const cat = it.Segmento || '';
       return `
         <div class="bp-card" data-id="${it.Id}" tabindex="0" role="button" title="Clique para ver detalhes" style="${borderStyle}">
           <div class="bp-card-head">
@@ -632,8 +632,8 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
     };
 
     const groupField = this._viewMode === 'app' ? 'Funcionacom'
-      : this._viewMode === 'area' ? 'Categoria0'
-      : this._viewMode === 'funcao' ? 'Categoria'
+      : this._viewMode === 'area' ? 'Categoria'
+      : this._viewMode === 'funcao' ? 'Segmento'
       : null;
 
     if (groupField) {
@@ -804,10 +804,10 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
   private _openDetails(item: IPromptItem): void {
     const initial: IPromptDetailsData = {
       titulo: item.Title || '',
-      acao: item.A_x00e7__x00e3_o || '',
+      acao: item.acao || '',
       prompt: stripHtml(item.Prompt),
-      segmento: item.Categoria || '',
-      categoria: item.Categoria0 || '',
+      segmento: item.Segmento || '',
+      categoria: item.Categoria || '',
       funcionaCom: item.Funcionacom || ''
     };
     const uid = this._currentUserId();
@@ -849,10 +849,10 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
     const list = encodeURIComponent(this.properties.targetListTitle);
     const body: Record<string, unknown> = {
       Title: data.titulo,
-      A_x00e7__x00e3_o: data.acao,
+      acao: data.acao,
       Prompt: data.prompt,
-      Categoria: data.segmento,
-      Categoria0: data.categoria,
+      Segmento: data.segmento,
+      Categoria: data.categoria,
       Funcionacom: data.funcionaCom
     };
     const url = `${webUrl}/_api/web/lists/getByTitle('${list}')/items(${id})`;
@@ -877,10 +877,10 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
     const list = encodeURIComponent(this.properties.targetListTitle);
     const body: Record<string, unknown> = {
       Title: data.titulo,
-      A_x00e7__x00e3_o: data.acao,
+      acao: data.acao,
       Prompt: data.prompt,
-      Categoria: data.segmento,
-      Categoria0: data.categoria,
+      Segmento: data.segmento,
+      Categoria: data.categoria,
       Funcionacom: data.funcionaCom
     };
     const url = `${webUrl}/_api/web/lists/getByTitle('${list}')/items`;

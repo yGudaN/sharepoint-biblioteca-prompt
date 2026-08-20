@@ -23,7 +23,7 @@
       "targetListTitle": "Biblioteca de Prompts",
       "favoritesListTitle": "⭐ Meus Favoritos",
       "promptIdField": "PromptID",
-      "copyFields": "A_x00e7__x00e3_o,Prompt,Categoria,Categoria0,Funcionacom",
+      "copyFields": "acao,Prompt,Segmento,Categoria,Funcionacom",
       "extraToolColors": ""
     }
   }]

@@ -1,0 +1,44 @@
+========================================================
+ BIBLIOTECA DE PROMPTS - PACOTE DE IMPLANTACAO
+========================================================
+
+O QUE TEM AQUI
+--------------
+- Iniciar-Assistente.bat            <- da duplo-clique aqui
+- Assistente.ps1                    <- wizard grafico (o .bat chama ele)
+- sharepoint-biblioteca-prompt.sppkg <- pacote da solucao SharePoint
+- avancado\                         <- scripts CLI (opcional, so pra devs)
+
+
+COMO USAR (10 minutos)
+----------------------
+1. Copie esta pasta inteira pra qualquer lugar do PC.
+2. Da duplo-clique em: Iniciar-Assistente.bat
+3. Se aparecer aviso do Windows SmartScreen:
+     - clica em "Mais informacoes"
+     - clica em "Executar assim mesmo"
+4. O wizard abre. Segue os 7 passos.
+
+
+REQUISITOS
+----------
+- Windows 10 / 11
+- PowerShell 7+ (se nao tiver, o .bat avisa)
+  Instalar em: https://aka.ms/powershell-release?tag=stable
+- Ser administrador do SharePoint / tenant onde vai instalar
+
+
+PROBLEMAS?
+----------
+- Wizard nao abre: instale o PowerShell 7 (link acima) e tenta de novo.
+- SmartScreen bloqueia: "Mais informacoes" -> "Executar assim mesmo".
+- Erro de execution policy: o .bat ja usa Bypass, mas se ainda travar,
+  abre o PowerShell 7 como admin e roda:
+    Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+
+VERSAO DO PACOTE
+----------------
+Veja a data do arquivo sharepoint-biblioteca-prompt.sppkg.
+Sempre pegue o pacote mais recente do repositorio oficial:
+https://github.com/yGudaN/sharepoint-biblioteca-prompt

@@ -287,7 +287,7 @@ Disconnect-PnPOnline
    - **Título da lista de prompts**: `Biblioteca de Prompts`
    - **Título da lista de favoritos**: `⭐ Meus Favoritos`
    - **Coluna PromptID**: `PromptID`
-   - **Campos copiados**: `A_x00e7__x00e3_o,Prompt,Categoria,Categoria0,Funcionacom`
+   - **Campos copiados**: `acao,Prompt,Segmento,Categoria,Funcionacom`
 7. Feche o painel.
 8. **Publicar** (botão azul canto superior direito).
 
@@ -328,7 +328,7 @@ Ex.: adicionar `Copilot` como opção em "Ação", ou remover `Fabric` de "Funci
 5. Clica **OK**
 6. Na próxima abertura da página, os dropdowns do "Novo prompt" e "Editar prompt" refletem as opções novas automaticamente.
 
-Vale pra qualquer campo Choice: `A_x00e7__x00e3_o`, `Categoria`, `Categoria0`, `Funcionacom`.
+Vale pra qualquer campo Choice: `acao`, `Segmento`, `Categoria`, `Funcionacom`.
 
 ### Adicionar cor customizada para uma nova ferramenta
 

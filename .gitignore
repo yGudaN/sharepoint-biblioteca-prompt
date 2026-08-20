@@ -17,6 +17,7 @@ release
 solution
 temp
 *.sppkg
+!implantacao/*.sppkg
 .heft
 
 # Coverage directory used by tools like istanbul
