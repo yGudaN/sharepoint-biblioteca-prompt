@@ -6,6 +6,8 @@ import {
   PropertyPaneSlider
 } from '@microsoft/sp-property-pane';
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
+import PromptDetailsDialog, { IPromptDetailsData } from '../bibliotecaPrompt/PromptDetailsDialog';
+import { IPromptChoices } from '../bibliotecaPrompt/promptChoices';
 
 export interface IAnalyticsWebPartProps {
   targetListTitle: string;
@@ -18,12 +20,14 @@ interface IPromptItem {
   Id: number;
   Title: string;
   Created: string;
+  Prompt?: string;
   A_x00e7__x00e3_o?: string;
   Categoria?: string;
   Categoria0?: string;
   Funcionacom?: string;
   AuthorId?: number;
   Author?: { Title: string; EMail: string };
+  Ativo?: boolean;
 }
 
 interface IFavItem {
@@ -37,6 +41,13 @@ type Period = 'all' | '30d' | '90d';
 function esc(s: unknown): string {
   const str = s === undefined || s === null ? '' : String(s);
   return str.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+}
+
+function stripHtml(s: string | undefined): string {
+  if (!s) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = s;
+  return tmp.textContent || tmp.innerText || '';
 }
 
 function daysAgoIso(days: number): string {
@@ -161,6 +172,9 @@ export default class AnalyticsWebPart extends BaseClientSideWebPart<IAnalyticsWe
         .an-rank { list-style: none; padding: 0; margin: 0; }
         .an-rank li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--an-border-2); }
         .an-rank li:last-child { border-bottom: none; }
+        .an-rank li.an-rank-clickable { cursor: pointer; padding: 8px; border-radius: 6px; margin: 0 -8px; border-bottom: none; }
+        .an-rank li.an-rank-clickable:hover { background: var(--an-hover); }
+        .an-rank li.an-rank-clickable:focus { outline: 2px solid var(--an-primary); outline-offset: 2px; }
         .an-rank-pos { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--an-hover); color: var(--an-text-2); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
         .an-rank li:nth-child(1) .an-rank-pos { background: #FFB900; color: #323130; }
         .an-rank li:nth-child(2) .an-rank-pos { background: #c8c8c8; color: #323130; }
@@ -237,7 +251,7 @@ export default class AnalyticsWebPart extends BaseClientSideWebPart<IAnalyticsWe
   private _loadItems(): Promise<void> {
     const webUrl = this.context.pageContext.web.absoluteUrl;
     const list = encodeURIComponent(this.properties.targetListTitle);
-    const select = ['Id', 'Title', 'Created', 'AuthorId', 'A_x00e7__x00e3_o', 'Categoria', 'Categoria0', 'Funcionacom', 'Author/Title', 'Author/EMail'].join(',');
+    const select = ['Id', 'Title', 'Created', 'AuthorId', 'Prompt', 'A_x00e7__x00e3_o', 'Categoria', 'Categoria0', 'Funcionacom', 'Ativo', 'Author/Title', 'Author/EMail'].join(',');
     const url = `${webUrl}/_api/web/lists/getByTitle('${list}')/items?$select=${select}&$expand=Author&$top=5000`;
     return this.context.spHttpClient.get(url, SPHttpClient.configurations.v1)
       .then((r: SPHttpClientResponse) => {
@@ -320,8 +334,8 @@ export default class AnalyticsWebPart extends BaseClientSideWebPart<IAnalyticsWe
     const popular = Object.keys(byPrompt).map((k) => {
       const id = Number(k);
       const it = promptById[id];
-      return { id, title: it ? it.Title : `Prompt #${id} (excluído)`, count: byPrompt[id] };
-    }).sort((a, b) => b.count - a.count).slice(0, topN);
+      return { id, title: it ? it.Title : `Prompt #${id} (excluído)`, count: byPrompt[id], ativo: !it || it.Ativo !== false };
+    }).filter((p) => p.ativo).sort((a, b) => b.count - a.count).slice(0, topN);
     const maxPop = popular.length > 0 ? popular[0].count : 0;
 
     container.innerHTML = `
@@ -348,7 +362,7 @@ export default class AnalyticsWebPart extends BaseClientSideWebPart<IAnalyticsWe
           ${popular.length === 0 ? '<div class="an-empty">Ainda ninguém favoritou prompts no período.</div>' : `
             <ol class="an-rank">
               ${popular.map((p, i) => `
-                <li>
+                <li class="${promptById[p.id] ? 'an-rank-clickable' : ''}" ${promptById[p.id] ? `data-prompt-id="${p.id}" tabindex="0" role="button" title="Clique para ver detalhes"` : ''}>
                   <span class="an-rank-pos">${i + 1}</span>
                   <div class="an-rank-body">
                     <div class="an-rank-name" title="${esc(p.title)}">${esc(p.title)}</div>
@@ -362,6 +376,37 @@ export default class AnalyticsWebPart extends BaseClientSideWebPart<IAnalyticsWe
         </div>
       </div>
     `;
+
+    container.querySelectorAll<HTMLElement>('[data-prompt-id]').forEach((el) => {
+      const openIt = (): void => {
+        const id = Number(el.getAttribute('data-prompt-id'));
+        const item = this._items.find((x) => x.Id === id);
+        if (item) this._openDetails(item);
+      };
+      el.addEventListener('click', openIt);
+      el.addEventListener('keydown', (ev: KeyboardEvent) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openIt(); }
+      });
+    });
+  }
+
+  private _openDetails(item: IPromptItem): void {
+    const initial: IPromptDetailsData = {
+      titulo: item.Title || '',
+      acao: item.A_x00e7__x00e3_o || '',
+      prompt: stripHtml(item.Prompt),
+      segmento: item.Categoria || '',
+      categoria: item.Categoria0 || '',
+      funcionaCom: item.Funcionacom || ''
+    };
+    const choices: IPromptChoices = {
+      acoes: initial.acao ? [initial.acao] : [],
+      segmentos: initial.segmento ? [initial.segmento] : [],
+      categorias: initial.categoria ? [initial.categoria] : [],
+      funcionaCom: initial.funcionaCom ? [initial.funcionaCom] : []
+    };
+    const dialog = new PromptDetailsDialog(initial, choices, this._theme, true);
+    dialog.show().catch((err) => this._showError(err));
   }
 
   protected getPropertyPaneConfiguration(): IPropertyPaneConfiguration {

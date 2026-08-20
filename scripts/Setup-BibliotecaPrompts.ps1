@@ -69,6 +69,12 @@ function New-NumberFieldXml {
     return "<Field Type='Number' Name='$Name' StaticName='$Name' DisplayName='$DisplayName' Required='$req' />"
 }
 
+function New-BooleanFieldXml {
+    param([string]$Name, [string]$DisplayName, [bool]$Default = $true)
+    $def = if ($Default) { '1' } else { '0' }
+    return "<Field Type='Boolean' Name='$Name' StaticName='$Name' DisplayName='$DisplayName'><Default>$def</Default></Field>"
+}
+
 function Ensure-List {
     param([string]$Title)
     $list = Get-PnPList -Identity $Title -ErrorAction SilentlyContinue
@@ -138,12 +144,14 @@ $xmlSegmento   = New-ChoiceFieldXml -Name 'Categoria' -DisplayName 'Segmento' -C
 $xmlCategoria  = New-ChoiceFieldXml -Name 'Categoria0' -DisplayName 'Categoria' -Choices $CATEGORIAS
 $xmlFuncCom    = New-ChoiceFieldXml -Name 'Funcionacom' -DisplayName 'Funciona com' -Choices $FUNCIONA_COM
 $xmlPromptId   = New-NumberFieldXml -Name 'PromptID' -DisplayName 'PromptID' -Required $true
+$xmlAtivo      = New-BooleanFieldXml -Name 'Ativo' -DisplayName 'Ativo' -Default $true
 
 Ensure-Field -ListTitle $PromptsListTitle -InternalName 'A_x00e7__x00e3_o' -FieldXml $xmlAcao
 Ensure-Field -ListTitle $PromptsListTitle -InternalName 'Prompt' -FieldXml $xmlPrompt
 Ensure-Field -ListTitle $PromptsListTitle -InternalName 'Categoria' -FieldXml $xmlSegmento
 Ensure-Field -ListTitle $PromptsListTitle -InternalName 'Categoria0' -FieldXml $xmlCategoria
 Ensure-Field -ListTitle $PromptsListTitle -InternalName 'Funcionacom' -FieldXml $xmlFuncCom
+Ensure-Field -ListTitle $PromptsListTitle -InternalName 'Ativo' -FieldXml $xmlAtivo
 
 # =====================================================
 # Lista de favoritos

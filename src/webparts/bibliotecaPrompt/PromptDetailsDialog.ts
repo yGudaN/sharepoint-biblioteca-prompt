@@ -25,16 +25,19 @@ function optionsHtml(items: string[], selected: string): string {
 
 export default class PromptDetailsDialog extends BaseDialog {
   public result: IPromptDetailsData | undefined;
+  public deactivate: boolean = false;
   private _initial: IPromptDetailsData;
   private _choices: IPromptChoices;
   private _theme: 'light' | 'dark';
+  private _readOnly: boolean;
   private _editing: boolean = false;
 
-  constructor(initial: IPromptDetailsData, choices?: IPromptChoices, theme: 'light' | 'dark' = 'light') {
+  constructor(initial: IPromptDetailsData, choices?: IPromptChoices, theme: 'light' | 'dark' = 'light', readOnly: boolean = false) {
     super();
     this._initial = initial;
     this._choices = choices || DEFAULT_PROMPT_CHOICES;
     this._theme = theme;
+    this._readOnly = readOnly;
   }
 
   public render(): void {
@@ -121,6 +124,16 @@ export default class PromptDetailsDialog extends BaseDialog {
         .pd-btn.primary:hover { background: var(--pd-primary-h); }
         .pd-btn.secondary { background: var(--pd-surface); border-color: var(--pd-border-3); color: var(--pd-text); }
         .pd-btn.secondary:hover { background: var(--pd-hover); }
+        .pd-btn.danger {
+          background: transparent;
+          border-color: var(--pd-danger);
+          color: var(--pd-danger);
+          margin-right: auto;
+          padding: 6px 12px;
+          font-size: 16px;
+          line-height: 1;
+        }
+        .pd-btn.danger:hover { background: var(--pd-danger); color: #fff; }
         .pd-mode-badge { font-size: 12px; padding: 2px 10px; border-radius: 12px; background: var(--pd-border); color: var(--pd-text-2); font-weight: 600; }
         .pd-label-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
         .pd-label-row .pd-label { margin-bottom: 0; }
@@ -183,9 +196,10 @@ export default class PromptDetailsDialog extends BaseDialog {
           </div>
         </form>
         <div class="pd-footer">
+          ${this._readOnly ? '' : '<button type="button" class="pd-btn danger" id="pd-deactivate" style="display:none" title="Excluir prompt">🗑️</button>'}
           <button type="button" class="pd-btn secondary" id="pd-close">Fechar</button>
-          <button type="button" class="pd-btn primary" id="pd-edit">Editar</button>
-          <button type="button" class="pd-btn primary" id="pd-save" style="display:none">Salvar</button>
+          ${this._readOnly ? '' : '<button type="button" class="pd-btn primary" id="pd-edit">Editar</button>'}
+          ${this._readOnly ? '' : '<button type="button" class="pd-btn primary" id="pd-save" style="display:none">Salvar</button>'}
         </div>
       </div>
     `;
@@ -195,11 +209,13 @@ export default class PromptDetailsDialog extends BaseDialog {
       this.result = undefined;
       this.close().catch(() => { /* noop */ });
     });
-    (root.querySelector('#pd-edit') as HTMLButtonElement).addEventListener('click', () => {
+    const editBtn = root.querySelector('#pd-edit') as HTMLButtonElement | null;
+    if (editBtn) editBtn.addEventListener('click', () => {
       this._editing = true;
       this._syncMode();
     });
-    (root.querySelector('#pd-save') as HTMLButtonElement).addEventListener('click', () => {
+    const saveBtn = root.querySelector('#pd-save') as HTMLButtonElement | null;
+    if (saveBtn) saveBtn.addEventListener('click', () => {
       const data = this._collectAndValidate();
       if (!data) return;
       this.result = data;
@@ -208,6 +224,14 @@ export default class PromptDetailsDialog extends BaseDialog {
     (root.querySelector('#pd-copy-prompt') as HTMLButtonElement).addEventListener('click', (ev) => {
       ev.preventDefault();
       this._copyPromptText(ev.currentTarget as HTMLButtonElement);
+    });
+    const deactivateBtn = root.querySelector('#pd-deactivate') as HTMLButtonElement | null;
+    if (deactivateBtn) deactivateBtn.addEventListener('click', () => {
+      const ok = window.confirm('Tem certeza que deseja excluir esse prompt?');
+      if (!ok) return;
+      this.deactivate = true;
+      this.result = undefined;
+      this.close().catch(() => { /* noop */ });
     });
   }
 
@@ -248,6 +272,8 @@ export default class PromptDetailsDialog extends BaseDialog {
     (root.querySelector('#pd-mode-badge') as HTMLElement).textContent = this._editing ? 'Edição' : 'Somente leitura';
     (root.querySelector('#pd-edit') as HTMLElement).style.display = this._editing ? 'none' : 'inline-block';
     (root.querySelector('#pd-save') as HTMLElement).style.display = this._editing ? 'inline-block' : 'none';
+    const deactBtn = root.querySelector('#pd-deactivate') as HTMLElement | null;
+    if (deactBtn) deactBtn.style.display = this._editing ? 'inline-block' : 'none';
   }
 
   private _collectAndValidate(): IPromptDetailsData | undefined {

@@ -25,6 +25,7 @@ interface IPromptItem {
   Categoria0?: string;
   Funcionacom?: string;
   A_x00e7__x00e3_o?: string;
+  Ativo?: boolean;
 }
 
 const FAV_FILLED = '#FFB900';
@@ -529,7 +530,7 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
   private _loadItems(): Promise<void> {
     const webUrl = this.context.pageContext.web.absoluteUrl;
     const list = encodeURIComponent(this.properties.targetListTitle);
-    const select = ['Id', 'Title', 'A_x00e7__x00e3_o', 'Prompt', 'Categoria', 'Categoria0', 'Funcionacom'].join(',');
+    const select = ['Id', 'Title', 'A_x00e7__x00e3_o', 'Prompt', 'Categoria', 'Categoria0', 'Funcionacom', 'Ativo'].join(',');
     const url = `${webUrl}/_api/web/lists/getByTitle('${list}')/items?$select=${select}&$top=5000&$orderby=Title`;
     return this.context.spHttpClient.get(url, SPHttpClient.configurations.v1)
       .then((r: SPHttpClientResponse) => {
@@ -537,7 +538,8 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
         return r.json();
       })
       .then((data: { value: IPromptItem[] }) => {
-        this._items = data.value || [];
+        // Filtro client-side: item ativo se Ativo != false (aceita true, undefined, null - compat com listas antigas sem a coluna)
+        this._items = (data.value || []).filter((it) => it.Ativo !== false);
       });
   }
 
@@ -800,11 +802,32 @@ export default class BibliotecaPromptWebPart extends BaseClientSideWebPart<IBibl
     const dialog = new PromptDetailsDialog(initial, this._choices, this._theme);
     dialog.show()
       .then(() => {
+        if (dialog.deactivate) return this._deactivatePrompt(item.Id);
         const data = dialog.result;
         if (!data) return undefined;
         return this._updatePrompt(item.Id, data);
       })
       .catch((err) => this._showError(err));
+  }
+
+  private _deactivatePrompt(id: number): Promise<void> {
+    const webUrl = this.context.pageContext.web.absoluteUrl;
+    const list = encodeURIComponent(this.properties.targetListTitle);
+    const url = `${webUrl}/_api/web/lists/getByTitle('${list}')/items(${id})`;
+    return this.context.spHttpClient.post(url, SPHttpClient.configurations.v1, {
+      headers: {
+        'Content-Type': 'application/json;odata=nometadata',
+        'Accept': 'application/json;odata=nometadata',
+        'X-HTTP-Method': 'MERGE',
+        'IF-MATCH': '*',
+        'odata-version': ''
+      },
+      body: JSON.stringify({ Ativo: false })
+    }).then((r: SPHttpClientResponse) => {
+      if (!r.ok) return r.text().then((t) => Promise.reject(new Error(`Excluir prompt falhou (HTTP ${r.status}): ${t}`)));
+      this._showToast('Prompt excluído com sucesso!');
+      return undefined;
+    }).then(() => this._loadAll());
   }
 
   private _updatePrompt(id: number, data: IPromptDetailsData): Promise<void> {
