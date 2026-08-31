@@ -1,0 +1,1 @@
+Coloque aqui: logo-bizapp.png (idealmente com fundo transparente e ~120x60px)

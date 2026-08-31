@@ -52,15 +52,17 @@ $CATEGORIAS   = @('Área','Função')
 $FUNCIONA_COM = @('Outlook','Teams','OneNote','Word','Excel','PowerPoint','Power BI','M365 Copilot','Copilot Studio','D365 CCaaS / Customer Service','D365 Customer Insights - Journeys','D365 Sales','Fabric','Power Apps','Power Automate','Power Pages','Whiteboard')
 
 function New-ChoiceFieldXml {
-    param([string]$Name, [string]$DisplayName, [string[]]$Choices)
+    param([string]$Name, [string]$DisplayName, [string[]]$Choices, [bool]$Required = $false)
     $escaped = $Choices | ForEach-Object { [System.Security.SecurityElement]::Escape($_) }
     $choicesXml = ($escaped | ForEach-Object { "<CHOICE>$_</CHOICE>" }) -join ''
-    return "<Field Type='Choice' Name='$Name' StaticName='$Name' DisplayName='$DisplayName' Format='Dropdown'><CHOICES>$choicesXml</CHOICES></Field>"
+    $req = if ($Required) { "Required='TRUE'" } else { '' }
+    return "<Field Type='Choice' Name='$Name' StaticName='$Name' DisplayName='$DisplayName' Format='Dropdown' $req><CHOICES>$choicesXml</CHOICES></Field>"
 }
 
 function New-NoteFieldXml {
-    param([string]$Name, [string]$DisplayName)
-    return "<Field Type='Note' Name='$Name' StaticName='$Name' DisplayName='$DisplayName' RichText='FALSE' NumLines='6' />"
+    param([string]$Name, [string]$DisplayName, [bool]$Required = $false)
+    $req = if ($Required) { "Required='TRUE'" } else { '' }
+    return "<Field Type='Note' Name='$Name' StaticName='$Name' DisplayName='$DisplayName' RichText='FALSE' NumLines='6' $req />"
 }
 
 function New-NumberFieldXml {
@@ -95,6 +97,19 @@ function Ensure-Field {
         Add-PnPFieldFromXml -List $ListTitle -FieldXml $FieldXml | Out-Null
     } else {
         Write-Host "    [=] Campo '$InternalName' já existe" -ForegroundColor Gray
+    }
+}
+
+function Set-DefaultViewFields {
+    param([string]$ListTitle, [string[]]$Fields)
+    try {
+        $view = Get-PnPView -List $ListTitle -ErrorAction SilentlyContinue | Where-Object { $_.DefaultView } | Select-Object -First 1
+        if ($view) {
+            Set-PnPView -List $ListTitle -Identity $view.Id -Fields $Fields | Out-Null
+            Write-Host "    [=] View padrão atualizada" -ForegroundColor Gray
+        }
+    } catch {
+        Write-Host "    [!] Nao atualizou a view padrao: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 }
 
@@ -138,11 +153,11 @@ Write-Host ""
 Write-Host "[1/2] Lista principal ('$PromptsListTitle')" -ForegroundColor Cyan
 Ensure-List -Title $PromptsListTitle | Out-Null
 
-$xmlAcao       = New-ChoiceFieldXml -Name 'acao' -DisplayName 'Ação' -Choices $ACOES
-$xmlPrompt     = New-NoteFieldXml -Name 'Prompt' -DisplayName 'Prompt'
-$xmlSegmento   = New-ChoiceFieldXml -Name 'Segmento' -DisplayName 'Segmento' -Choices $SEGMENTOS
-$xmlCategoria  = New-ChoiceFieldXml -Name 'Categoria' -DisplayName 'Categoria' -Choices $CATEGORIAS
-$xmlFuncCom    = New-ChoiceFieldXml -Name 'Funcionacom' -DisplayName 'Funciona com' -Choices $FUNCIONA_COM
+$xmlAcao       = New-ChoiceFieldXml -Name 'acao' -DisplayName 'Ação' -Choices $ACOES -Required $true
+$xmlPrompt     = New-NoteFieldXml -Name 'Prompt' -DisplayName 'Prompt' -Required $true
+$xmlSegmento   = New-ChoiceFieldXml -Name 'Segmento' -DisplayName 'Segmento' -Choices $SEGMENTOS -Required $true
+$xmlCategoria  = New-ChoiceFieldXml -Name 'Categoria' -DisplayName 'Categoria' -Choices $CATEGORIAS -Required $true
+$xmlFuncCom    = New-ChoiceFieldXml -Name 'Funcionacom' -DisplayName 'Funciona com' -Choices $FUNCIONA_COM -Required $true
 $xmlPromptId   = New-NumberFieldXml -Name 'PromptID' -DisplayName 'PromptID' -Required $true
 $xmlAtivo      = New-BooleanFieldXml -Name 'Ativo' -DisplayName 'Ativo' -Default $true
 
@@ -152,6 +167,7 @@ Ensure-Field -ListTitle $PromptsListTitle -InternalName 'Segmento' -FieldXml $xm
 Ensure-Field -ListTitle $PromptsListTitle -InternalName 'Categoria' -FieldXml $xmlCategoria
 Ensure-Field -ListTitle $PromptsListTitle -InternalName 'Funcionacom' -FieldXml $xmlFuncCom
 Ensure-Field -ListTitle $PromptsListTitle -InternalName 'Ativo' -FieldXml $xmlAtivo
+Set-DefaultViewFields -ListTitle $PromptsListTitle -Fields @('Title','acao','Segmento','Categoria','Funcionacom','Ativo','Editor','Modified')
 
 # =====================================================
 # Lista de favoritos
@@ -166,6 +182,7 @@ Ensure-Field -ListTitle $FavoritesListTitle -InternalName 'Prompt' -FieldXml $xm
 Ensure-Field -ListTitle $FavoritesListTitle -InternalName 'Segmento' -FieldXml $xmlSegmento
 Ensure-Field -ListTitle $FavoritesListTitle -InternalName 'Categoria' -FieldXml $xmlCategoria
 Ensure-Field -ListTitle $FavoritesListTitle -InternalName 'Funcionacom' -FieldXml $xmlFuncCom
+Set-DefaultViewFields -ListTitle $FavoritesListTitle -Fields @('Title','PromptID','acao','Segmento','Categoria','Funcionacom','Author','Created')
 
 Write-Host ""
 Write-Host "== Concluído com sucesso! ==" -ForegroundColor Green

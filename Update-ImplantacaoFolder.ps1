@@ -33,6 +33,8 @@ $mapping = @(
     @{ From = 'sharepoint\solution\sharepoint-biblioteca-prompt.sppkg'; To = $dest }
     @{ From = 'scripts\Setup-BibliotecaPrompts.ps1';              To = $destAvancado }
     @{ From = 'scripts\Configure-Page.ps1';                       To = $destAvancado }
+    @{ From = 'scripts\Diagnosticar-WebParts.ps1';                To = $destAvancado }
+    @{ From = 'scripts\Criar-Pagina-Webpart.ps1';                 To = $destAvancado }
 )
 
 Write-Host ''
@@ -50,6 +52,16 @@ foreach ($m in $mapping) {
     }
     Copy-Item -Force $src $m.To
     Write-Host "  [OK]    $($m.From)" -ForegroundColor Green
+    $copiados++
+}
+
+# Sincroniza pasta assets/ (logo, icones)
+$assetsSrc = Join-Path $root 'assistente\assets'
+$assetsDst = Join-Path $dest 'assets'
+if (Test-Path $assetsSrc) {
+    if (-not (Test-Path $assetsDst)) { New-Item -ItemType Directory -Force -Path $assetsDst | Out-Null }
+    Copy-Item -Force -Recurse "$assetsSrc\*" $assetsDst
+    Write-Host "  [OK]    assistente\assets\* (recursivo)" -ForegroundColor Green
     $copiados++
 }
 

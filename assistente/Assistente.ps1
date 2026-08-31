@@ -9,8 +9,8 @@
       2. Verificacao de pre-requisitos (PowerShell 7+, modulo PnP.PowerShell)
       3. Registro do App no Entra ID (gera ClientId)
       4. Provisionamento das listas SharePoint
-      5. Passo manual: subir .sppkg no App Catalog + criar paginas
-      6. Configuracao das paginas (layout tela cheia + social bar desligada)
+      5. Passo manual: subir .sppkg no App Catalog + instalar app no site
+      6. Criacao automatica das paginas + web parts + layout tela cheia
       7. Conclusao
 
     Todos os comandos PowerShell rodam no fundo. O usuario so preenche formularios.
@@ -25,6 +25,38 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
+
+# =========================================================================
+# FONTES CUSTOMIZADAS (Inter)
+# =========================================================================
+$global:privateFonts = New-Object System.Drawing.Text.PrivateFontCollection
+$global:fontUiName = 'Segoe UI'  # fallback se Inter nao carregar
+$fontRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+if ($fontRoot) {
+    $fontsDir = @(
+        (Join-Path $fontRoot 'assets\fonts'),
+        (Join-Path $fontRoot 'fonts')
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($fontsDir) {
+        Get-ChildItem -Path $fontsDir -Filter 'Inter-*.ttf' -File -ErrorAction SilentlyContinue | ForEach-Object {
+            try { $global:privateFonts.AddFontFile($_.FullName) } catch { }
+        }
+        if ($global:privateFonts.Families.Count -gt 0) {
+            $interFam = $global:privateFonts.Families | Where-Object { $_.Name -match 'Inter' } | Select-Object -First 1
+            if ($interFam) { $global:fontUiName = $interFam.Name }
+        }
+    }
+}
+
+function global:New-UiFont {
+    param([single]$Size = 10, [System.Drawing.FontStyle]$Style = [System.Drawing.FontStyle]::Regular, [string]$FamilyOverride)
+    $fam = if ($FamilyOverride) { $FamilyOverride } else { $global:fontUiName }
+    if ($fam -eq $global:fontUiName -and $global:privateFonts.Families.Count -gt 0) {
+        $family = $global:privateFonts.Families | Where-Object { $_.Name -eq $fam } | Select-Object -First 1
+        if ($family) { return New-Object System.Drawing.Font($family, $Size, $Style) }
+    }
+    return New-Object System.Drawing.Font($fam, $Size, $Style)
+}
 
 # =========================================================================
 # ESTADO GLOBAL
@@ -44,18 +76,61 @@ $global:currentStep = 1
 $global:totalSteps  = 7
 $global:onNext = $null   # callback opcional executado antes de avancar
 
-# Paleta
-$colorPrimary   = [System.Drawing.Color]::FromArgb(0, 120, 212)
-$colorPrimaryH  = [System.Drawing.Color]::FromArgb(16, 110, 190)
-$colorBg        = [System.Drawing.Color]::FromArgb(250, 249, 248)
-$colorText      = [System.Drawing.Color]::FromArgb(50, 49, 48)
-$colorMuted     = [System.Drawing.Color]::FromArgb(96, 94, 92)
-$colorSuccess   = [System.Drawing.Color]::FromArgb(16, 124, 16)
-$colorDanger    = [System.Drawing.Color]::FromArgb(164, 38, 44)
+# Paleta Bizapp (global para acesso via closures)
+$global:colorPrimary        = [System.Drawing.Color]::FromArgb(0x95, 0x3C, 0xCC)  # #953CCC roxo principal
+$global:colorPrimaryH       = [System.Drawing.Color]::FromArgb(0x7B, 0x2E, 0xB0)  # roxo mais escuro (hover)
+$global:colorGradientStart  = [System.Drawing.Color]::FromArgb(0x80, 0x34, 0xAE)  # #8034AE
+$global:colorGradientEnd    = [System.Drawing.Color]::FromArgb(0xCB, 0x61, 0xE8)  # #CB61E8
+$global:colorBg             = [System.Drawing.Color]::FromArgb(0xF3, 0xF2, 0xF5)  # #F3F2F5 off-white
+$global:colorText           = [System.Drawing.Color]::FromArgb(0x06, 0x01, 0x0A)  # #06010A preto
+$global:colorMuted          = [System.Drawing.Color]::FromArgb(96, 94, 92)
+$global:colorSuccess        = [System.Drawing.Color]::FromArgb(16, 124, 16)
+$global:colorDanger         = [System.Drawing.Color]::FromArgb(164, 38, 44)
+$global:colorHeaderText     = [System.Drawing.Color]::White                        # #FFFFFF
+$global:colorDisabledBg     = [System.Drawing.Color]::FromArgb(0xCF, 0xCE, 0xD1)  # cinza claro
+$global:colorDisabledText   = [System.Drawing.Color]::FromArgb(0x06, 0x01, 0x0A)  # texto preto
+
+# Aliases sem prefixo pra compatibilidade com codigo existente
+$colorPrimary        = $global:colorPrimary
+$colorPrimaryH       = $global:colorPrimaryH
+$colorGradientStart  = $global:colorGradientStart
+$colorGradientEnd    = $global:colorGradientEnd
+$colorBg             = $global:colorBg
+$colorText           = $global:colorText
+$colorMuted          = $global:colorMuted
+$colorSuccess        = $global:colorSuccess
+$colorDanger         = $global:colorDanger
+$colorHeaderText     = $global:colorHeaderText
+$colorDisabledBg     = $global:colorDisabledBg
+$colorDisabledText   = $global:colorDisabledText
 
 # =========================================================================
 # HELPERS
 # =========================================================================
+function global:Test-HasEmoji {
+    param([string]$Text)
+    if (-not $Text) { return $false }
+    foreach ($c in $Text.ToCharArray()) {
+        $code = [int]$c
+        if ($code -ge 0x2600  -and $code -le 0x27BF) { return $true }
+        if ($code -ge 0x2B00  -and $code -le 0x2BFF) { return $true }
+        if ($code -ge 0xD800  -and $code -le 0xDBFF) { return $true }
+        if ($code -ge 0xFE00  -and $code -le 0xFE0F) { return $true }
+    }
+    return $false
+}
+
+function global:Test-GuidFormat {
+    param([string]$Value)
+    if (-not $Value) { return $false }
+    return ($Value -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+}
+
+function global:Get-UiFontName {
+    param([string]$Text)
+    if (Test-HasEmoji $Text) { return 'Segoe UI Emoji' } else { return $global:fontUiName }
+}
+
 function global:New-Label {
     param([string]$Text, [int]$X, [int]$Y, [int]$Width = 680, [int]$FontSize = 10, [bool]$Bold = $false, [System.Drawing.Color]$Color = $colorText)
     $l = New-Object System.Windows.Forms.Label
@@ -65,7 +140,7 @@ function global:New-Label {
     $h = [int]($FontSize * 1.8) + 8
     if ($Width -gt 0) { $l.Size = New-Object System.Drawing.Size($Width, $h) }
     $style = if ($Bold) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }
-    $l.Font = New-Object System.Drawing.Font('Segoe UI', $FontSize, $style)
+    $l.Font = New-UiFont -FamilyOverride (Get-UiFontName $Text) -Size $FontSize -Style $style
     $l.ForeColor = $Color
     return $l
 }
@@ -75,9 +150,30 @@ function global:New-TextInput {
     $t = New-Object System.Windows.Forms.TextBox
     $t.Location = New-Object System.Drawing.Point($X, $Y)
     $t.Size = New-Object System.Drawing.Size($Width, 24)
-    $t.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    $t.Font = New-UiFont -Size 10
     $t.Text = $Text
     return $t
+}
+
+function global:Apply-ButtonState {
+    param($Button)
+    if (-not $Button) { return }
+    $Button.UseVisualStyleBackColor = $false
+    if ($Button.Enabled) {
+        if ($Button.Tag -eq 'primary') {
+            $Button.BackColor = $global:colorPrimary
+            $Button.ForeColor = [System.Drawing.Color]::White
+            $Button.FlatAppearance.BorderSize = 0
+        } else {
+            $Button.BackColor = [System.Drawing.Color]::White
+            $Button.ForeColor = $global:colorText
+        }
+    } else {
+        $Button.BackColor = $global:colorDisabledBg
+        $Button.ForeColor = $global:colorDisabledText
+        $Button.FlatAppearance.BorderSize = 0
+    }
+    $Button.Refresh()
 }
 
 function global:New-Button {
@@ -86,17 +182,17 @@ function global:New-Button {
     $b.Text = $Text
     $b.Location = New-Object System.Drawing.Point($X, $Y)
     $b.Size = New-Object System.Drawing.Size($Width, 32)
-    $b.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    $b.Font = New-UiFont -FamilyOverride (Get-UiFontName $Text) -Size 10
     $b.FlatStyle = 'Flat'
+    $b.UseVisualStyleBackColor = $false
     if ($Primary) {
-        $b.BackColor = $colorPrimary
-        $b.ForeColor = [System.Drawing.Color]::White
-        $b.FlatAppearance.BorderSize = 0
+        $b.Tag = 'primary'
     } else {
-        $b.BackColor = [System.Drawing.Color]::White
-        $b.ForeColor = $colorText
+        $b.Tag = 'secondary'
         $b.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(200, 198, 196)
     }
+    Apply-ButtonState $b
+    $b.Add_EnabledChanged({ param($sender, $e) Apply-ButtonState $sender })
     return $b
 }
 
@@ -164,8 +260,8 @@ function Show-StepWelcome {
         '1. Verificação de pré-requisitos (PowerShell + módulo PnP.PowerShell)',
         '2. Registro do App no Entra ID (gera o ClientId)',
         '3. Provisionamento das listas SharePoint',
-        '4. Passo manual: você sobe o .sppkg + cria as páginas',
-        '5. Configuração das páginas (tela cheia + barra social desligada)',
+        '4. Passo manual: subir .sppkg no App Catalog + instalar app no site',
+        '5. Criação automática das páginas + web parts + layout tela cheia',
         '6. Conclusão'
     )
     $y = 140
@@ -313,6 +409,26 @@ function Show-StepAppRegistration {
     $txtClientId = New-TextInput -X 20 -Y 400 -Width 400 -Text $global:state.ClientId
     $content.Controls.Add($txtClientId)
 
+    $content.Controls.Add((New-Label -Text 'Formato esperado: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 caracteres com hifens)' -X 20 -Y 430 -Width 600 -Color $colorMuted -FontSize 9))
+
+    $lblClientIdStatus = New-Label -Text '' -X 430 -Y 405 -Width 290 -FontSize 9
+    $content.Controls.Add($lblClientIdStatus)
+
+    $updateClientIdStatus = {
+        $v = $txtClientId.Text.Trim()
+        if (-not $v) {
+            $lblClientIdStatus.Text = ''
+        } elseif (Test-GuidFormat $v) {
+            $lblClientIdStatus.Text = "✓ Formato ok"
+            $lblClientIdStatus.ForeColor = $colorSuccess
+        } else {
+            $lblClientIdStatus.Text = "✗ Formato invalido ($($v.Length) chars)"
+            $lblClientIdStatus.ForeColor = $colorDanger
+        }
+    }.GetNewClosure()
+    $txtClientId.Add_TextChanged($updateClientIdStatus)
+    & $updateClientIdStatus
+
     $btnCopy.Add_Click({
         try {
             [System.Windows.Forms.Clipboard]::SetText($txtCommand.Text)
@@ -338,9 +454,15 @@ function Show-StepAppRegistration {
     $btnNext.Text = 'Avançar >'
     $btnNext.Tag = 'appreg'
     $global:onNext = {
+        $cid = $txtClientId.Text.Trim()
+        if (-not (Test-GuidFormat $cid)) {
+            Show-ErrorBox "ClientId invalido. O formato esperado e:`r`nxxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 caracteres com hifens).`r`n`r`nValor atual: '$cid' ($($cid.Length) caracteres)."
+            return $false
+        }
         $global:state.Tenant   = $txtTenant.Text.Trim()
         $global:state.AppName  = $txtAppName.Text.Trim()
-        $global:state.ClientId = $txtClientId.Text.Trim()
+        $global:state.ClientId = $cid
+        return $true
     }.GetNewClosure()
 }
 
@@ -350,26 +472,29 @@ function Show-StepLists {
     $content.Controls.Clear()
 
     $content.Controls.Add((New-Label -Text '📋 Provisionar listas' -X 20 -Y 15 -FontSize 16 -Bold $true))
-    $content.Controls.Add((New-Label -Text 'Preencha os dados do site alvo. As listas serão criadas com as colunas corretas.' -X 20 -Y 50 -Width 720 -Color $colorMuted))
+    $content.Controls.Add((New-Label -Text 'Cria as listas que faltam e atualiza colunas/config nas existentes.' -X 20 -Y 50 -Width 720 -Color $colorMuted))
 
-    $content.Controls.Add((New-Label -Text 'URL do site SharePoint:' -X 20 -Y 90))
+    $content.Controls.Add((New-Label -Text 'URL do site SharePoint:' -X 20 -Y 85))
     $suggested = if ($global:state.SiteUrl) { $global:state.SiteUrl } elseif ($global:state.Tenant) { "https://$($global:state.Tenant).sharepoint.com/sites/" } else { '' }
-    $txtSiteUrl = New-TextInput -X 20 -Y 115 -Width 600 -Text $suggested
+    $txtSiteUrl = New-TextInput -X 20 -Y 110 -Width 600 -Text $suggested
     $content.Controls.Add($txtSiteUrl)
 
-    $content.Controls.Add((New-Label -Text 'Nome da lista de prompts:' -X 20 -Y 155))
-    $txtPromptsList = New-TextInput -X 20 -Y 180 -Width 400 -Text $global:state.PromptsListTitle
+    $content.Controls.Add((New-Label -Text 'Nome da lista de prompts:' -X 20 -Y 143))
+    $txtPromptsList = New-TextInput -X 20 -Y 168 -Width 400 -Text $global:state.PromptsListTitle
     $content.Controls.Add($txtPromptsList)
 
-    $content.Controls.Add((New-Label -Text 'Nome da lista de favoritos:' -X 20 -Y 220))
-    $txtFavList = New-TextInput -X 20 -Y 245 -Width 400 -Text $global:state.FavoritesListTitle
+    $content.Controls.Add((New-Label -Text 'Nome da lista de favoritos:' -X 20 -Y 201))
+    $txtFavList = New-TextInput -X 20 -Y 226 -Width 400 -Text $global:state.FavoritesListTitle
     $content.Controls.Add($txtFavList)
 
-    $btnProvision = New-Button -Text 'Criar listas agora' -X 20 -Y 285 -Width 200 -Primary $true
+    $btnProvision = New-Button -Text 'Verificar as listas' -X 20 -Y 260 -Width 200 -Primary $true
     $content.Controls.Add($btnProvision)
 
-    $log = New-LogBox -X 20 -Y 330 -Width 700 -Height 100
+    $log = New-LogBox -X 20 -Y 300 -Width 700 -Height 170
     $content.Controls.Add($log)
+
+    $lblStatus = New-Label -Text 'Aguardando verificação das listas...' -X 20 -Y 485 -Width 700 -Color $colorMuted -Bold $true
+    $content.Controls.Add($lblStatus)
 
     $global:listsOk = $false
 
@@ -389,10 +514,15 @@ function Show-StepLists {
             Write-Log $log '✅ Conectado.' $colorSuccess
             Invoke-ListProvisioning -Log $log
             Write-Log $log ''
-            Write-Log $log '🎉 Listas prontas! Clique em Avançar.' $colorSuccess
+            Write-Log $log '🎉 Listas verificadas! Pode avançar.' $colorSuccess
             $global:listsOk = $true
+            $lblStatus.Text = '✅ Listas verificadas — pode avançar'
+            $lblStatus.ForeColor = $colorSuccess
+            $btnNext.Enabled = $true
         } catch {
             Write-Log $log "❌ Falha: $($_.Exception.Message)" $colorDanger
+            $lblStatus.Text = '❌ Falha na verificação - veja o log acima'
+            $lblStatus.ForeColor = $colorDanger
         } finally {
             try { Disconnect-PnPOnline } catch {}
         }
@@ -400,7 +530,9 @@ function Show-StepLists {
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
+    $btnNext.Enabled = $false
     $btnNext.Tag = 'lists'
+    $global:onNext = $null
 }
 
 function Show-StepManualUpload {
@@ -408,17 +540,18 @@ function Show-StepManualUpload {
     Update-Header
     $content.Controls.Clear()
 
-    $content.Controls.Add((New-Label -Text '📦 Passo manual: subir .sppkg e criar página' -X 20 -Y 15 -FontSize 16 -Bold $true))
-    $content.Controls.Add((New-Label -Text 'Faça os passos abaixo no browser. Quando terminar, preencha os nomes das páginas que você criou.' -X 20 -Y 50 -Width 720 -Color $colorMuted))
+    $content.Controls.Add((New-Label -Text '📦 Passo manual: subir .sppkg e instalar no site' -X 20 -Y 15 -FontSize 16 -Bold $true))
+    $content.Controls.Add((New-Label -Text 'Faça os 5 passos abaixo. As páginas serão criadas automaticamente na próxima etapa.' -X 20 -Y 50 -Width 720 -Color $colorMuted))
 
     $instr = @'
-1. Localize o arquivo sharepoint-biblioteca-prompt.sppkg (nesta pasta, se veio zipado, ou baixe do GitHub / compile localmente)
+1. Localize o arquivo sharepoint-biblioteca-prompt.sppkg (nesta pasta, se veio zipado, ou baixe do GitHub)
 2. Vá em: https://<seu-tenant>-admin.sharepoint.com → SharePoint → Apps → App Catalog
-3. Apps for SharePoint → Upload → escolha o .sppkg → NÃO marque "make available to all sites" → Deploy
-4. Vá no site alvo → engrenagem ⚙️ → Add an app → procure "sharepoint-biblioteca-prompt-webpart" → Add
-5. + Novo → Página em branco → Nome: "Biblioteca de Prompts" (ou o que preferir)
-6. + no meio → busca "Biblioteca" → adicione a web part → confirme os títulos das listas no painel de propriedades → Publicar
-7. (Opcional) Repita passos 5-6 para uma segunda página com a web part "Dashboard - Biblioteca de Prompts"
+3. Apps for SharePoint → Upload → escolha o .sppkg → Deploy
+4. Vá no site alvo → engrenagem → Add an app → procure "sharepoint-biblioteca-prompt-webpart" → Add
+5. Aguarde alguns segundos até o app aparecer em Site Contents
+
+Dica: se o app não aparecer para adicionar no site (passo 4), volte no passo 3 e marque
+"Make this solution available to all sites in the organization" antes de clicar em Deploy.
 '@
     $txtInstr = New-Object System.Windows.Forms.TextBox
     $txtInstr.Multiline = $true
@@ -426,8 +559,8 @@ function Show-StepManualUpload {
     $txtInstr.ReadOnly = $true
     $txtInstr.Text = $instr
     $txtInstr.Location = New-Object System.Drawing.Point(20, 90)
-    $txtInstr.Size = New-Object System.Drawing.Size(700, 180)
-    $txtInstr.Font = New-Object System.Drawing.Font('Segoe UI', 9)
+    $txtInstr.Size = New-Object System.Drawing.Size(700, 155)
+    $txtInstr.Font = New-UiFont -Size 9
     $content.Controls.Add($txtInstr)
 
     # Detecta .sppkg ao lado do assistente (pasta implantacao/ empacotada)
@@ -439,34 +572,35 @@ function Show-StepManualUpload {
     }
 
     if ($localSppkg) {
-        $lblLocal = New-Label -Text "📦 .sppkg detectado nesta pasta: $(Split-Path $localSppkg -Leaf)" -X 20 -Y 275 -Width 500 -Color $colorSuccess
+        $lblLocal = New-Label -Text "📦 .sppkg detectado nesta pasta: $(Split-Path $localSppkg -Leaf)" -X 20 -Y 255 -Width 500 -Color $colorSuccess
         $content.Controls.Add($lblLocal)
-        $btnOpenFolder = New-Button -Text '📂 Abrir pasta' -X 530 -Y 272 -Width 130
+        $btnOpenFolder = New-Button -Text '📂 Abrir pasta' -X 530 -Y 252 -Width 130
         $btnOpenFolder.Add_Click({
             Start-Process 'explorer.exe' -ArgumentList "/select,`"$localSppkg`""
         }.GetNewClosure())
         $content.Controls.Add($btnOpenFolder)
-        $yLbl1 = 305; $yInp1 = 330; $yLbl2 = 370; $yInp2 = 395
-    } else {
-        $yLbl1 = 285; $yInp1 = 310; $yLbl2 = 350; $yInp2 = 375
     }
 
-    $content.Controls.Add((New-Label -Text 'Nome do arquivo .aspx da página da Biblioteca (ex.: Biblioteca-de-Prompts.aspx):' -X 20 -Y $yLbl1 -Width 700))
-    $txtBibliotecaPage = New-TextInput -X 20 -Y $yInp1 -Width 400 -Text $global:state.BibliotecaPageName
-    $content.Controls.Add($txtBibliotecaPage)
+    $lblWarn = New-Label -Text '⚠ Não avance sem completar TODOS os 5 passos acima. Depois clique em "Já fiz o upload".' -X 20 -Y 300 -Width 700 -Color $colorDanger -Bold $true -FontSize 10
+    $content.Controls.Add($lblWarn)
 
-    $content.Controls.Add((New-Label -Text 'Nome do arquivo .aspx da página do Dashboard (opcional):' -X 20 -Y $yLbl2 -Width 700))
-    $txtDashboardPage = New-TextInput -X 20 -Y $yInp2 -Width 400 -Text $global:state.DashboardPageName
-    $content.Controls.Add($txtDashboardPage)
+    $btnConfirm = New-Button -Text '✓ Já fiz o upload' -X 20 -Y 340 -Width 200 -Primary $true
+    $content.Controls.Add($btnConfirm)
+
+    $lblStatus = New-Label -Text 'Aguardando confirmação...' -X 240 -Y 345 -Width 480 -Color $colorMuted
+    $content.Controls.Add($lblStatus)
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Enabled = $true
-    $btnNext.Tag = 'manual'
-    $global:onNext = {
-        $global:state.BibliotecaPageName = $txtBibliotecaPage.Text.Trim()
-        $global:state.DashboardPageName = $txtDashboardPage.Text.Trim()
-    }.GetNewClosure()
+    $btnNext.Enabled = $false
+    $global:onNext = $null
+
+    $btnConfirm.Add_Click({
+        $lblStatus.Text = '✅ Confirmado — pode avançar'
+        $lblStatus.ForeColor = $colorSuccess
+        $btnNext.Enabled = $true
+        $btnConfirm.Enabled = $false
+    }.GetNewClosure())
 }
 
 function Show-StepConfigure {
@@ -474,71 +608,204 @@ function Show-StepConfigure {
     Update-Header
     $content.Controls.Clear()
 
-    $content.Controls.Add((New-Label -Text '🎨 Configurar páginas' -X 20 -Y 15 -FontSize 16 -Bold $true))
-    $content.Controls.Add((New-Label -Text 'Aplicando layout de tela cheia e desligando a barra social do site.' -X 20 -Y 50 -Width 720 -Color $colorMuted))
+    $content.Controls.Add((New-Label -Text '🎨 Criar páginas e configurar' -X 20 -Y 15 -FontSize 16 -Bold $true))
+    $content.Controls.Add((New-Label -Text 'Vou criar as páginas, inserir as web parts, aplicar layout tela cheia e desligar a barra social.' -X 20 -Y 50 -Width 720 -Color $colorMuted))
 
-    $summary = "Site: $($global:state.SiteUrl)`r`nBiblioteca: $($global:state.BibliotecaPageName)"
-    if ($global:state.DashboardPageName) { $summary += "`r`nDashboard: $($global:state.DashboardPageName)" }
-    $lblSummary = New-Label -Text $summary -X 20 -Y 90 -Width 0
-    $lblSummary.MaximumSize = New-Object System.Drawing.Size(700, 0)
-    $content.Controls.Add($lblSummary)
+    $content.Controls.Add((New-Label -Text 'Nome da página da Biblioteca a ser criada (Ex.: Biblioteca-de-Prompts):' -X 20 -Y 88 -Width 700))
+    $bibDefault = if ($global:state.BibliotecaPageName) { ($global:state.BibliotecaPageName -replace '\.aspx$','') } else { 'Biblioteca-de-Prompts' }
+    $txtBib = New-TextInput -X 20 -Y 113 -Width 400 -Text $bibDefault
+    $content.Controls.Add($txtBib)
 
-    $btnRun = New-Button -Text 'Configurar agora' -X 20 -Y 180 -Width 180 -Primary $true
+    $content.Controls.Add((New-Label -Text 'Nome da página do Dashboard a ser criada (Ex.: Dashboard-Biblioteca-de-Prompts) - opcional:' -X 20 -Y 148 -Width 700))
+    $dashDefault = if ($global:state.DashboardPageName) { ($global:state.DashboardPageName -replace '\.aspx$','') } else { 'Dashboard-Biblioteca-de-Prompts' }
+    $txtDash = New-TextInput -X 20 -Y 173 -Width 400 -Text $dashDefault
+    $content.Controls.Add($txtDash)
+
+    $content.Controls.Add((New-Label -Text 'Recomendado usar hífen entre as palavras. Pode ter espaço, mas fica melhor sem.' -X 20 -Y 203 -Width 700 -Color $colorMuted -FontSize 9))
+
+    $btnRun = New-Button -Text 'Criar e configurar agora' -X 20 -Y 230 -Width 220 -Primary $true
     $content.Controls.Add($btnRun)
 
-    $log = New-LogBox -X 20 -Y 220 -Width 700 -Height 210
+    $log = New-LogBox -X 20 -Y 275 -Width 700 -Height 260
     $content.Controls.Add($log)
 
+    $btnBack.Visible = $true
+    $btnNext.Text = 'Avançar >'
+    $btnNext.Enabled = $false
+    $global:onNext = $null
+
     $btnRun.Add_Click({
-        if (-not $global:state.BibliotecaPageName) {
-            Show-ErrorBox 'Informe o nome da página da Biblioteca (etapa anterior).'
+        $bibName = ($txtBib.Text.Trim() -replace '\.aspx$','')
+        $dashName = ($txtDash.Text.Trim() -replace '\.aspx$','')
+        if (-not $bibName) {
+            Show-ErrorBox 'Informe o nome da página da Biblioteca.'
             return
         }
+        $global:state.BibliotecaPageName = "$bibName.aspx"
+        $global:state.DashboardPageName = if ($dashName) { "$dashName.aspx" } else { '' }
+
         $log.Clear()
-        Write-Log $log '🔌 Conectando em thread separada. Uma janela do browser pode abrir para login - complete e volte aqui.' $colorMuted
+        Write-Log $log '🔌 Conectando (rodando em thread separada para não travar a tela)...' $colorMuted
+        Write-Log $log '   Uma janela do browser pode abrir para login - complete e volte aqui.' $colorMuted
+        Write-Log $log ''
+
         try {
             $siteUrl  = $global:state.SiteUrl
             $clientId = $global:state.ClientId
-            $bibPage  = $global:state.BibliotecaPageName
-            $dashPage = $global:state.DashboardPageName
+            $bibPage  = $bibName
+            $dashPage = $dashName
+            $bibWpId  = 'c8e4a1f2-7b3d-4e9a-8f5c-6d2b1a9e3f4c'
+            $dashWpId = 'd3f7a2e4-6b91-4c8f-a5d2-1c9e4b7f3a8b'
+
+            $bibProps = @{
+                targetListTitle    = $global:state.PromptsListTitle
+                favoritesListTitle = $global:state.FavoritesListTitle
+                promptIdField      = 'PromptID'
+                copyFields         = 'acao,Prompt,Segmento,Categoria,Funcionacom'
+                extraToolColors    = ''
+            } | ConvertTo-Json -Compress
+
+            $dashProps = @{
+                targetListTitle    = $global:state.PromptsListTitle
+                favoritesListTitle = $global:state.FavoritesListTitle
+                promptIdField      = 'PromptID'
+                topN               = 10
+            } | ConvertTo-Json -Compress
 
             $job = Start-ThreadJob -ScriptBlock {
-                param($SiteUrl, $ClientId, $BibPage, $DashPage)
+                param($SiteUrl, $ClientId, $BibPage, $DashPage, $BibWpId, $DashWpId, $BibProps, $DashProps)
                 Import-Module PnP.PowerShell
+                Write-Output ">> Conectando ao SharePoint..."
                 Connect-PnPOnline -Url $SiteUrl -Interactive -ClientId $ClientId -ErrorAction Stop
+                Write-Output ">> Conectado."
+                Write-Output ""
 
-                Write-Output "Configurando pagina '$BibPage'..."
-                Set-PnPPage -Identity $BibPage -LayoutType SingleWebPartAppPage | Out-Null
-                Set-PnPPage -Identity $BibPage -Publish | Out-Null
-                Write-Output "Pagina da Biblioteca OK."
+                function Setup-Page {
+                    param([string]$PageName, [string]$WebPartId, [string]$Label, [string]$PropsJson)
+                    $file = "$PageName.aspx"
+                    $existing = Get-PnPPage -Identity $file -ErrorAction SilentlyContinue
+                    if ($existing) {
+                        Write-Output "  Pagina '$PageName' ja existe - pulando (delete manualmente para recriar)."
+                        Write-Output ""
+                        return $false
+                    }
+                    Write-Output "  [1/7] Criando pagina '$PageName' em branco..."
+                    Add-PnPPage -Name $PageName -ErrorAction Stop | Out-Null
 
-                if ($DashPage) {
-                    Write-Output "Configurando pagina '$DashPage'..."
-                    Set-PnPPage -Identity $DashPage -LayoutType SingleWebPartAppPage | Out-Null
-                    Set-PnPPage -Identity $DashPage -Publish | Out-Null
-                    Write-Output "Pagina do Dashboard OK."
+                    Write-Output "  [2/7] Buscando web part '$Label' entre os componentes do site..."
+                    $comps = Get-PnPAvailablePageComponents -Page $file -ErrorAction SilentlyContinue
+                    $wpIdNorm = $WebPartId.ToLower()
+                    $comp = $comps | Where-Object {
+                        $cid = ($_.Id.ToString() -replace '[{}]','').ToLower()
+                        $cid -eq $wpIdNorm -or $_.Name -eq $Label
+                    } | Select-Object -First 1
+
+                    if (-not $comp) {
+                        Write-Output "  AVISO: web part '$Label' NAO encontrada."
+                        Write-Output "  Verifique se o app foi instalado no site (passo 5)."
+                        Write-Output ""
+
+                        Write-Output "  -- Apps instalados neste site --"
+                        try {
+                            $apps = Get-PnPApp -Scope Site -ErrorAction SilentlyContinue
+                            if ($apps) {
+                                foreach ($a in $apps) {
+                                    Write-Output "    Id=$($a.Id)  Title='$($a.Title)'  Deployed=$($a.Deployed)"
+                                }
+                            } else {
+                                Write-Output "    (nenhum)"
+                            }
+                        } catch {
+                            Write-Output "    Falha ao listar apps: $($_.Exception.Message)"
+                        }
+                        Write-Output ""
+                        Write-Output "  >> Adicione a web part manualmente na pagina '$file'."
+                        Write-Output ""
+                        return $false
+                    }
+
+                    Write-Output "  [3/7] Componente encontrado: $($comp.Name) [$($comp.Id)]"
+
+                    Write-Output "  [4/7] Adicionando web part na pagina..."
+                    Add-PnPPageWebPart -Page $file -Component $comp -ErrorAction Stop | Out-Null
+
+                    Write-Output "  [5/7] Configurando propriedades da web part..."
+                    try {
+                        $onPage = Get-PnPPageComponent -Page $file -ErrorAction Stop
+                        $ourInstance = $onPage | Where-Object {
+                            $wid = ($_.WebPartId.ToString() -replace '[{}]','').ToLower()
+                            $wid -eq $wpIdNorm
+                        } | Select-Object -First 1
+                        if ($ourInstance) {
+                            Set-PnPPageWebPart -Page $file -Identity $ourInstance.InstanceId -PropertiesJson $PropsJson -ErrorAction Stop | Out-Null
+                            Write-Output "     Propriedades salvas (instance $($ourInstance.InstanceId))."
+                        } else {
+                            Write-Output "     ATENCAO: nao achei instancia da web part para configurar propriedades."
+                        }
+                    } catch {
+                        Write-Output "     ATENCAO ao configurar propriedades: $($_.Exception.Message)"
+                    }
+
+                    Write-Output "  [6/7] Aplicando layout SingleWebPartAppPage (tela cheia)..."
+                    try {
+                        Set-PnPPage -Identity $file -LayoutType SingleWebPartAppPage -ErrorAction Stop | Out-Null
+                        Write-Output "     Layout aplicado."
+                    } catch {
+                        Write-Output "     ATENCAO ao aplicar layout: $($_.Exception.Message)"
+                    }
+
+                    Write-Output "  [7/7] Publicando pagina..."
+                    Set-PnPPage -Identity $file -Publish -ErrorAction Stop | Out-Null
+
+                    Write-Output "  Pagina '$PageName' pronta e configurada."
+                    Write-Output ""
+                    return $true
                 }
 
-                Write-Output "Desligando barra social do site..."
+                Write-Output ">> [1] Pagina da Biblioteca: '$BibPage'"
+                Setup-Page -PageName $BibPage -WebPartId $BibWpId -Label 'Biblioteca de Prompts' -PropsJson $BibProps
+
+                if ($DashPage) {
+                    Write-Output ">> [2] Pagina do Dashboard: '$DashPage'"
+                    Setup-Page -PageName $DashPage -WebPartId $DashWpId -Label 'Dashboard — Biblioteca de Prompts' -PropsJson $DashProps
+                } else {
+                    Write-Output ">> [2] Dashboard pulado (nao informado)."
+                    Write-Output ""
+                }
+
+                Write-Output ">> [3] Desligando barra social do site..."
                 Set-PnPSite -SocialBarOnSitePagesDisabled $true
-                Write-Output "Barra social desligada."
+                Write-Output "  Barra social desligada."
+                Write-Output ""
+                Write-Output ">> Tudo pronto."
 
                 try { Disconnect-PnPOnline } catch {}
-            } -ArgumentList $siteUrl, $clientId, $bibPage, $dashPage
+            } -ArgumentList $siteUrl, $clientId, $bibPage, $dashPage, $bibWpId, $dashWpId, $bibProps, $dashProps
 
-            # Poll mantendo a UI viva
+            # Poll com streaming em tempo real
             while ($job.State -in 'Running','NotStarted') {
+                $partial = Receive-Job -Job $job -ErrorAction SilentlyContinue
+                if ($partial) {
+                    foreach ($line in $partial) {
+                        Write-Log $log ($line.ToString())
+                    }
+                }
                 [System.Windows.Forms.Application]::DoEvents()
-                Start-Sleep -Milliseconds 200
+                Start-Sleep -Milliseconds 300
             }
-
-            $out = Receive-Job -Job $job -ErrorAction Continue 2>&1 | Out-String
+            # Drena o que sobrou
+            $final = Receive-Job -Job $job -ErrorAction SilentlyContinue
+            if ($final) {
+                foreach ($line in $final) {
+                    Write-Log $log ($line.ToString())
+                }
+            }
             Remove-Job -Job $job -Force
-            Write-Log $log $out
 
             if ($job.State -eq 'Completed') {
                 Write-Log $log ''
                 Write-Log $log '🎉 Tudo configurado! Clique em Avançar.' $colorSuccess
+                $btnNext.Enabled = $true
             } else {
                 Write-Log $log "❌ Job terminou com estado: $($job.State)" $colorDanger
             }
@@ -546,9 +813,6 @@ function Show-StepConfigure {
             Write-Log $log "❌ Falha: $($_.Exception.Message)" $colorDanger
         }
     }.GetNewClosure())
-
-    $btnBack.Visible = $true
-    $btnNext.Text = 'Avançar >'
 }
 
 function Show-StepDone {
@@ -600,10 +864,11 @@ function global:Invoke-ListProvisioning {
     $CATEGORIAS   = @('Área','Função')
     $FUNCIONA_COM = @('Outlook','Teams','OneNote','Word','Excel','PowerPoint','Power BI','M365 Copilot','Copilot Studio','D365 CCaaS / Customer Service','D365 Customer Insights - Journeys','D365 Sales','Fabric','Power Apps','Power Automate','Power Pages','Whiteboard')
 
-    function ChoiceXml { param([string]$Name, [string]$DisplayName, [string[]]$Choices)
+    function ChoiceXml { param([string]$Name, [string]$DisplayName, [string[]]$Choices, [bool]$Required = $false)
         $esc = $Choices | ForEach-Object { [System.Security.SecurityElement]::Escape($_) }
         $cxml = ($esc | ForEach-Object { "<CHOICE>$_</CHOICE>" }) -join ''
-        return "<Field Type='Choice' Name='$Name' StaticName='$Name' DisplayName='$DisplayName' Format='Dropdown'><CHOICES>$cxml</CHOICES></Field>"
+        $req = if ($Required) { "Required='TRUE'" } else { '' }
+        return "<Field Type='Choice' Name='$Name' StaticName='$Name' DisplayName='$DisplayName' Format='Dropdown' $req><CHOICES>$cxml</CHOICES></Field>"
     }
 
     function EnsureList { param([string]$Title, $L)
@@ -624,12 +889,23 @@ function global:Invoke-ListProvisioning {
             Write-Log $L "    ✓ Campo '$Name' já existe" $colorMuted
         }
     }
+    function SetDefaultViewFields { param([string]$List, [string[]]$Fields, $L)
+        try {
+            $view = Get-PnPView -List $List -ErrorAction SilentlyContinue | Where-Object { $_.DefaultView } | Select-Object -First 1
+            if ($view) {
+                Set-PnPView -List $List -Identity $view.Id -Fields $Fields | Out-Null
+                Write-Log $L "    ✓ View padrão atualizada: $($Fields -join ', ')" $colorMuted
+            }
+        } catch {
+            Write-Log $L "    ⚠ Não foi possível atualizar view padrão: $($_.Exception.Message)" $colorMuted
+        }
+    }
 
-    $xAcao      = ChoiceXml 'acao' 'Ação' $ACOES
-    $xPrompt    = "<Field Type='Note' Name='Prompt' StaticName='Prompt' DisplayName='Prompt' RichText='FALSE' NumLines='6' />"
-    $xSegmento  = ChoiceXml 'Segmento' 'Segmento' $SEGMENTOS
-    $xCategoria = ChoiceXml 'Categoria' 'Categoria' $CATEGORIAS
-    $xFuncCom   = ChoiceXml 'Funcionacom' 'Funciona com' $FUNCIONA_COM
+    $xAcao      = ChoiceXml 'acao' 'Ação' $ACOES $true
+    $xPrompt    = "<Field Type='Note' Name='Prompt' StaticName='Prompt' DisplayName='Prompt' RichText='FALSE' NumLines='6' Required='TRUE' />"
+    $xSegmento  = ChoiceXml 'Segmento' 'Segmento' $SEGMENTOS $true
+    $xCategoria = ChoiceXml 'Categoria' 'Categoria' $CATEGORIAS $true
+    $xFuncCom   = ChoiceXml 'Funcionacom' 'Funciona com' $FUNCIONA_COM $true
     $xAtivo     = "<Field Type='Boolean' Name='Ativo' StaticName='Ativo' DisplayName='Ativo'><Default>1</Default></Field>"
     $xPromptId  = "<Field Type='Number' Name='PromptID' StaticName='PromptID' DisplayName='PromptID' Required='TRUE' />"
 
@@ -641,6 +917,7 @@ function global:Invoke-ListProvisioning {
     EnsureField $global:state.PromptsListTitle 'Categoria' $xCategoria $Log
     EnsureField $global:state.PromptsListTitle 'Funcionacom' $xFuncCom $Log
     EnsureField $global:state.PromptsListTitle 'Ativo' $xAtivo $Log
+    SetDefaultViewFields $global:state.PromptsListTitle @('Title','acao','Segmento','Categoria','Funcionacom','Ativo','Editor','Modified') $Log
 
     Write-Log $Log ''
     Write-Log $Log ('[2/2] Lista de favoritos: ' + $global:state.FavoritesListTitle) $colorMuted
@@ -651,6 +928,7 @@ function global:Invoke-ListProvisioning {
     EnsureField $global:state.FavoritesListTitle 'Segmento' $xSegmento $Log
     EnsureField $global:state.FavoritesListTitle 'Categoria' $xCategoria $Log
     EnsureField $global:state.FavoritesListTitle 'Funcionacom' $xFuncCom $Log
+    SetDefaultViewFields $global:state.FavoritesListTitle @('Title','PromptID','acao','Segmento','Categoria','Funcionacom','Author','Created') $Log
 }
 
 # =========================================================================
@@ -673,6 +951,8 @@ function Update-Header {
     $lblStep.Text = "Etapa $($global:currentStep) de $global:totalSteps"
     $progressBar.Value = [int](($global:currentStep / $global:totalSteps) * 100)
     $btnNext.Enabled = $true
+    Apply-ButtonState $btnNext
+    Apply-ButtonState $btnBack
 }
 
 # =========================================================================
@@ -680,34 +960,71 @@ function Update-Header {
 # =========================================================================
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Biblioteca de Prompts — Assistente de Implantação'
-$form.Size = New-Object System.Drawing.Size(770, 620)
+$form.Size = New-Object System.Drawing.Size(770, 740)
 $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
 $form.BackColor = [System.Drawing.Color]::White
-$form.Font = New-Object System.Drawing.Font('Segoe UI', 9)
+$form.Font = New-UiFont -Size 9
 
-# Header
+# Header (com gradiente roxo)
 $header = New-Object System.Windows.Forms.Panel
 $header.Dock = 'Top'
 $header.Height = 70
 $header.BackColor = $colorPrimary
+$header.Add_Paint({
+    param($sender, $e)
+    $rect = $sender.ClientRectangle
+    if ($rect.Width -le 0 -or $rect.Height -le 0) { return }
+    $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect, $colorGradientStart, $colorGradientEnd, 0)
+    $e.Graphics.FillRectangle($brush, $rect)
+    $brush.Dispose()
+})
 
 $title = New-Object System.Windows.Forms.Label
 $title.Text = '📚 Biblioteca de Prompts'
-$title.Font = New-Object System.Drawing.Font('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
-$title.ForeColor = [System.Drawing.Color]::White
+$title.Font = New-UiFont -FamilyOverride (Get-UiFontName $title.Text) -Size 15 -Style ([System.Drawing.FontStyle]::Bold)
+$title.ForeColor = $colorHeaderText
+$title.BackColor = [System.Drawing.Color]::Transparent
 $title.AutoSize = $true
 $title.Location = New-Object System.Drawing.Point(20, 12)
 $header.Controls.Add($title)
 
 $lblStep = New-Object System.Windows.Forms.Label
 $lblStep.Text = 'Etapa 1 de 7'
-$lblStep.Font = New-Object System.Drawing.Font('Segoe UI', 9)
-$lblStep.ForeColor = [System.Drawing.Color]::White
+$lblStep.Font = New-UiFont -Size 9
+$lblStep.ForeColor = $colorHeaderText
+$lblStep.BackColor = [System.Drawing.Color]::Transparent
 $lblStep.AutoSize = $true
 $lblStep.Location = New-Object System.Drawing.Point(20, 42)
 $header.Controls.Add($lblStep)
+
+# Logo Bizapp (canto superior direito, se o arquivo existir)
+$scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+$logoPath = $null
+if ($scriptRoot) {
+    $candidates = @(
+        (Join-Path $scriptRoot 'assets\logo-bizapp.png'),
+        (Join-Path $scriptRoot 'logo-bizapp.png')
+    )
+    foreach ($p in $candidates) { if (Test-Path $p) { $logoPath = $p; break } }
+}
+if ($logoPath) {
+    try {
+        $logoImg = [System.Drawing.Image]::FromFile($logoPath)
+        $picLogo = New-Object System.Windows.Forms.PictureBox
+        $picLogo.Image = $logoImg
+        $picLogo.SizeMode = 'Zoom'
+        $picLogo.BackColor = [System.Drawing.Color]::Transparent
+        # Encaixa 130x50 no canto direito, com margem
+        $picLogo.Size = New-Object System.Drawing.Size(130, 50)
+        $picLogo.Location = New-Object System.Drawing.Point(($header.Width - 150), 10)
+        $picLogo.Anchor = 'Top,Right'
+        $header.Controls.Add($picLogo)
+    } catch {
+        Write-Host "Nao consegui carregar o logo: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
 
 $form.Controls.Add($header)
 
@@ -724,11 +1041,19 @@ $form.Controls.Add($progressBar)
 # Footer
 $footer = New-Object System.Windows.Forms.Panel
 $footer.Dock = 'Bottom'
-$footer.Height = 60
+$footer.Height = 75
 $footer.BackColor = $colorBg
 
 $btnNext = New-Button -Text 'Avançar >' -X 620 -Y 15 -Width 120 -Primary $true
 $btnBack = New-Button -Text '< Voltar' -X 490 -Y 15 -Width 120
+
+$lblCopyright = New-Object System.Windows.Forms.Label
+$lblCopyright.Text = '© 2026 Bizapp (bizappcrm.com). Todos os direitos reservados.'
+$lblCopyright.Font = New-UiFont -Size 8
+$lblCopyright.ForeColor = $colorMuted
+$lblCopyright.AutoSize = $true
+$lblCopyright.Location = New-Object System.Drawing.Point(20, 55)
+$footer.Controls.Add($lblCopyright)
 
 $footer.Controls.Add($btnNext)
 $footer.Controls.Add($btnBack)
@@ -737,7 +1062,7 @@ $form.Controls.Add($footer)
 # Content
 $content = New-Object System.Windows.Forms.Panel
 $content.Dock = 'Fill'
-$content.BackColor = [System.Drawing.Color]::White
+$content.BackColor = $colorBg
 $form.Controls.Add($content)
 
 # --- ordem correta pra Dock ---
@@ -748,9 +1073,14 @@ $form.Controls.SetChildIndex($header, 3)
 
 # Navegação
 $btnNext.Add_Click({
-    # Executa callback do passo atual (salvar campos digitados no state) antes de avançar.
+    # Executa callback do passo atual. Se retornar $false, cancela a navegação.
     if ($global:onNext) {
-        try { & $global:onNext } catch { }
+        $goAhead = $true
+        try {
+            $r = & $global:onNext
+            if ($r -is [bool] -and -not $r) { $goAhead = $false }
+        } catch { }
+        if (-not $goAhead) { return }
         $global:onNext = $null
     }
     if ($btnNext.Tag -eq 'done') { $form.Close(); return }
