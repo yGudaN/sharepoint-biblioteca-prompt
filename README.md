@@ -92,15 +92,24 @@ O assistente te guia por tudo. Você só preenche formulários — nenhum comand
 |---|---|---|
 | **1. Boas-vindas** | Resume o que vem pela frente | — |
 | **2. Pré-requisitos** | Verifica PowerShell 7 e módulo PnP.PowerShell (instala se faltar) | Só clicar em **Verificar** |
-| **3. Registro do App no Entra ID** | Cria o App Registration no tenant (só uma vez por tenant) | Nome do tenant (ex.: `empresax.onmicrosoft.com`). Vai abrir uma janela nova de PowerShell para você fazer login como admin |
-| **4. Provisionar listas** | Cria as listas `Biblioteca de Prompts` e `⭐ Meus Favoritos` no site | URL completa do site (ex.: `https://empresax.sharepoint.com/sites/BibliotecaPrompts`) e o `ClientId` gerado no passo 3 |
-| **5. Upload do `.sppkg` + criar páginas** | Instruções para o passo manual (não dá para automatizar via API) | Botão **📂 Abrir pasta** já leva ao `.sppkg` que veio junto |
-| **6. Configurar páginas** | Aplica layout tela cheia e desliga a barra social | Nomes dos arquivos `.aspx` das páginas que você criou |
-| **7. Concluído** | Confirma que tudo foi feito | — |
+| **3. Registro do App no Entra ID** | Cria o App Registration no tenant (só uma vez por tenant) | Nome do tenant (ex.: `empresax.onmicrosoft.com`). Valida o formato do `ClientId` antes de avançar |
+| **4. Provisionar listas** | Cria (ou atualiza) as listas `Biblioteca de Prompts` e `⭐ Meus Favoritos` no site com campos obrigatórios e view padrão | URL do site e o `ClientId` do passo 3. Idempotente — pode rodar de novo em cima |
+| **5. Upload do `.sppkg` + instalar app** | Instruções para o passo manual (subir no App Catalog + Add an app no site) | Detecta o `.sppkg` na pasta, tem botão **📂 Abrir pasta**. Marque a caixa de confirmação para avançar |
+| **6. Criar páginas + configurar** | **Automático**: cria as páginas, insere as web parts (Biblioteca + Dashboard), aplica layout tela cheia (`SingleWebPartAppPage`) e desliga a barra social do site | Nome das páginas a criar (ex.: `Biblioteca-de-Prompts`, `Dashboard-Biblioteca-de-Prompts`) |
+| **7. Concluído** | Resumo da instalação com botão para abrir a Biblioteca no browser | — |
 
 ### 4. Feito!
 
 Depois do passo 7, a Biblioteca de Prompts tá funcionando. Acesse a página no SharePoint ou adicione como aba no Teams.
+
+### ✨ Novidades desta versão
+
+- **Criação automática de páginas** — o assistente cria as páginas, adiciona as web parts com as propriedades corretas, aplica o layout tela cheia e desliga a barra social. Zero configuração manual pós-upload do `.sppkg`.
+- **Listas com campos obrigatórios** — os campos `Ação`, `Prompt`, `Segmento`, `Categoria` e `Funciona com` viram obrigatórios. View padrão já vem com todas as colunas relevantes.
+- **Verificação idempotente** — no passo 4 o botão vira "Verificar as listas". Roda em cima de instalações existentes sem duplicar nada e atualiza a config quando precisa.
+- **Validação clara** — botão Avançar sempre habilitado; se faltar validação, aparece mensagem explicando o que falta.
+- **Diagnóstico** — em `avancado/` tem `Diagnosticar-WebParts.ps1` e `Criar-Pagina-Webpart.ps1` para debug quando algo dá errado.
+- **Identidade visual Bizapp** — cores roxas com gradiente no header, fonte Inter embutida (sem depender de instalação), logo Bizapp opcional em `assets/logo-bizapp.png`.
 
 ---
 

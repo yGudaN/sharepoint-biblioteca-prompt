@@ -75,6 +75,10 @@ $global:state = @{
 $global:currentStep = 1
 $global:totalSteps  = 7
 $global:onNext = $null   # callback opcional executado antes de avancar
+$global:isDoneStep = $false
+$global:listsOk = $false
+$global:uploadOk = $false
+$global:configOk = $false
 
 # Paleta Bizapp (global para acesso via closures)
 $global:colorPrimary        = [System.Drawing.Color]::FromArgb(0x95, 0x3C, 0xCC)  # #953CCC roxo principal
@@ -274,7 +278,6 @@ function Show-StepWelcome {
 
     $btnBack.Visible = $false
     $btnNext.Text = 'Avançar >'
-    $btnNext.Tag = 'welcome'
 }
 
 function Show-StepPrerequisites {
@@ -344,7 +347,6 @@ function Show-StepPrerequisites {
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Tag = 'prereq'
 
     # Roda verificação depois que a UI acabar de renderizar (via Timer 100ms).
     $timer = New-Object System.Windows.Forms.Timer
@@ -452,7 +454,6 @@ function Show-StepAppRegistration {
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Tag = 'appreg'
     $global:onNext = {
         $cid = $txtClientId.Text.Trim()
         if (-not (Test-GuidFormat $cid)) {
@@ -518,7 +519,6 @@ function Show-StepLists {
             $global:listsOk = $true
             $lblStatus.Text = '✅ Listas verificadas — pode avançar'
             $lblStatus.ForeColor = $colorSuccess
-            $btnNext.Enabled = $true
         } catch {
             Write-Log $log "❌ Falha: $($_.Exception.Message)" $colorDanger
             $lblStatus.Text = '❌ Falha na verificação - veja o log acima'
@@ -530,9 +530,13 @@ function Show-StepLists {
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Enabled = $false
-    $btnNext.Tag = 'lists'
-    $global:onNext = $null
+    $global:onNext = {
+        if (-not $global:listsOk) {
+            Show-ErrorBox 'Clique em "Verificar as listas" antes de avançar.'
+            return $false
+        }
+        return $true
+    }.GetNewClosure()
 }
 
 function Show-StepManualUpload {
@@ -581,26 +585,29 @@ Dica: se o app não aparecer para adicionar no site (passo 4), volte no passo 3 
         $content.Controls.Add($btnOpenFolder)
     }
 
-    $lblWarn = New-Label -Text '⚠ Não avance sem completar TODOS os 5 passos acima. Depois clique em "Já fiz o upload".' -X 20 -Y 300 -Width 700 -Color $colorDanger -Bold $true -FontSize 10
+    $lblWarn = New-Label -Text '⚠ Não avance sem completar TODOS os 5 passos acima. Marque a caixa abaixo para confirmar.' -X 20 -Y 300 -Width 700 -Color $colorDanger -Bold $true -FontSize 10
     $content.Controls.Add($lblWarn)
 
-    $btnConfirm = New-Button -Text '✓ Já fiz o upload' -X 20 -Y 340 -Width 200 -Primary $true
-    $content.Controls.Add($btnConfirm)
-
-    $lblStatus = New-Label -Text 'Aguardando confirmação...' -X 240 -Y 345 -Width 480 -Color $colorMuted
-    $content.Controls.Add($lblStatus)
+    $chkConfirm = New-Object System.Windows.Forms.CheckBox
+    $chkConfirm.Text = 'Confirmo que subi o .sppkg no App Catalog e adicionei o app no site'
+    $chkConfirm.Location = New-Object System.Drawing.Point(20, 340)
+    $chkConfirm.Size = New-Object System.Drawing.Size(700, 30)
+    $chkConfirm.Font = New-UiFont -Size 10
+    $chkConfirm.ForeColor = $colorText
+    $chkConfirm.BackColor = [System.Drawing.Color]::Transparent
+    $chkConfirm.Checked = $global:uploadOk
+    $chkConfirm.Add_CheckedChanged({ $global:uploadOk = $chkConfirm.Checked }.GetNewClosure())
+    $content.Controls.Add($chkConfirm)
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Enabled = $false
-    $global:onNext = $null
-
-    $btnConfirm.Add_Click({
-        $lblStatus.Text = '✅ Confirmado — pode avançar'
-        $lblStatus.ForeColor = $colorSuccess
-        $btnNext.Enabled = $true
-        $btnConfirm.Enabled = $false
-    }.GetNewClosure())
+    $global:onNext = {
+        if (-not $global:uploadOk) {
+            Show-ErrorBox 'Marque a caixa "Confirmo que subi o .sppkg..." antes de avançar.'
+            return $false
+        }
+        return $true
+    }.GetNewClosure()
 }
 
 function Show-StepConfigure {
@@ -631,8 +638,13 @@ function Show-StepConfigure {
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Enabled = $false
-    $global:onNext = $null
+    $global:onNext = {
+        if (-not $global:configOk) {
+            Show-ErrorBox 'Clique em "Criar e configurar agora" antes de avançar.'
+            return $false
+        }
+        return $true
+    }.GetNewClosure()
 
     $btnRun.Add_Click({
         $bibName = ($txtBib.Text.Trim() -replace '\.aspx$','')
@@ -805,7 +817,7 @@ function Show-StepConfigure {
             if ($job.State -eq 'Completed') {
                 Write-Log $log ''
                 Write-Log $log '🎉 Tudo configurado! Clique em Avançar.' $colorSuccess
-                $btnNext.Enabled = $true
+                $global:configOk = $true
             } else {
                 Write-Log $log "❌ Job terminou com estado: $($job.State)" $colorDanger
             }
@@ -849,8 +861,7 @@ function Show-StepDone {
 
     $btnBack.Visible = $false
     $btnNext.Text = 'Fechar'
-    $btnNext.Tag = 'done'
-    $btnNext.Enabled = $true
+    $global:isDoneStep = $true
 }
 
 # =========================================================================
@@ -936,6 +947,7 @@ function global:Invoke-ListProvisioning {
 # =========================================================================
 function Show-Current {
     $global:onNext = $null  # reset callback do passo
+    $global:isDoneStep = $false
     switch ($global:currentStep) {
         1 { Show-StepWelcome }
         2 { Show-StepPrerequisites }
@@ -1083,7 +1095,7 @@ $btnNext.Add_Click({
         if (-not $goAhead) { return }
         $global:onNext = $null
     }
-    if ($btnNext.Tag -eq 'done') { $form.Close(); return }
+    if ($global:isDoneStep) { $form.Close(); return }
     if ($global:currentStep -lt $global:totalSteps) {
         $global:currentStep++
         Show-Current

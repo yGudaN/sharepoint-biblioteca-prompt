@@ -75,20 +75,38 @@ $global:state = @{
 $global:currentStep = 1
 $global:totalSteps  = 7
 $global:onNext = $null   # callback opcional executado antes de avancar
+$global:isDoneStep = $false
+$global:listsOk = $false
+$global:uploadOk = $false
+$global:configOk = $false
 
-# Paleta Bizapp
-$colorPrimary        = [System.Drawing.Color]::FromArgb(0x95, 0x3C, 0xCC)  # #953CCC roxo principal
-$colorPrimaryH       = [System.Drawing.Color]::FromArgb(0x7B, 0x2E, 0xB0)  # roxo mais escuro (hover)
-$colorGradientStart  = [System.Drawing.Color]::FromArgb(0x80, 0x34, 0xAE)  # #8034AE
-$colorGradientEnd    = [System.Drawing.Color]::FromArgb(0xCB, 0x61, 0xE8)  # #CB61E8
-$colorBg             = [System.Drawing.Color]::FromArgb(0xF3, 0xF2, 0xF5)  # #F3F2F5 off-white
-$colorText           = [System.Drawing.Color]::FromArgb(0x06, 0x01, 0x0A)  # #06010A preto
-$colorMuted          = [System.Drawing.Color]::FromArgb(96, 94, 92)
-$colorSuccess        = [System.Drawing.Color]::FromArgb(16, 124, 16)
-$colorDanger         = [System.Drawing.Color]::FromArgb(164, 38, 44)
-$colorHeaderText     = [System.Drawing.Color]::White                        # #FFFFFF
-$colorDisabledBg     = [System.Drawing.Color]::FromArgb(0xCF, 0xCE, 0xD1)  # cinza claro
-$colorDisabledText   = [System.Drawing.Color]::FromArgb(0x06, 0x01, 0x0A)  # texto preto
+# Paleta Bizapp (global para acesso via closures)
+$global:colorPrimary        = [System.Drawing.Color]::FromArgb(0x95, 0x3C, 0xCC)  # #953CCC roxo principal
+$global:colorPrimaryH       = [System.Drawing.Color]::FromArgb(0x7B, 0x2E, 0xB0)  # roxo mais escuro (hover)
+$global:colorGradientStart  = [System.Drawing.Color]::FromArgb(0x80, 0x34, 0xAE)  # #8034AE
+$global:colorGradientEnd    = [System.Drawing.Color]::FromArgb(0xCB, 0x61, 0xE8)  # #CB61E8
+$global:colorBg             = [System.Drawing.Color]::FromArgb(0xF3, 0xF2, 0xF5)  # #F3F2F5 off-white
+$global:colorText           = [System.Drawing.Color]::FromArgb(0x06, 0x01, 0x0A)  # #06010A preto
+$global:colorMuted          = [System.Drawing.Color]::FromArgb(96, 94, 92)
+$global:colorSuccess        = [System.Drawing.Color]::FromArgb(16, 124, 16)
+$global:colorDanger         = [System.Drawing.Color]::FromArgb(164, 38, 44)
+$global:colorHeaderText     = [System.Drawing.Color]::White                        # #FFFFFF
+$global:colorDisabledBg     = [System.Drawing.Color]::FromArgb(0xCF, 0xCE, 0xD1)  # cinza claro
+$global:colorDisabledText   = [System.Drawing.Color]::FromArgb(0x06, 0x01, 0x0A)  # texto preto
+
+# Aliases sem prefixo pra compatibilidade com codigo existente
+$colorPrimary        = $global:colorPrimary
+$colorPrimaryH       = $global:colorPrimaryH
+$colorGradientStart  = $global:colorGradientStart
+$colorGradientEnd    = $global:colorGradientEnd
+$colorBg             = $global:colorBg
+$colorText           = $global:colorText
+$colorMuted          = $global:colorMuted
+$colorSuccess        = $global:colorSuccess
+$colorDanger         = $global:colorDanger
+$colorHeaderText     = $global:colorHeaderText
+$colorDisabledBg     = $global:colorDisabledBg
+$colorDisabledText   = $global:colorDisabledText
 
 # =========================================================================
 # HELPERS
@@ -141,6 +159,27 @@ function global:New-TextInput {
     return $t
 }
 
+function global:Apply-ButtonState {
+    param($Button)
+    if (-not $Button) { return }
+    $Button.UseVisualStyleBackColor = $false
+    if ($Button.Enabled) {
+        if ($Button.Tag -eq 'primary') {
+            $Button.BackColor = $global:colorPrimary
+            $Button.ForeColor = [System.Drawing.Color]::White
+            $Button.FlatAppearance.BorderSize = 0
+        } else {
+            $Button.BackColor = [System.Drawing.Color]::White
+            $Button.ForeColor = $global:colorText
+        }
+    } else {
+        $Button.BackColor = $global:colorDisabledBg
+        $Button.ForeColor = $global:colorDisabledText
+        $Button.FlatAppearance.BorderSize = 0
+    }
+    $Button.Refresh()
+}
+
 function global:New-Button {
     param([string]$Text, [int]$X, [int]$Y, [int]$Width = 140, [bool]$Primary = $false)
     $b = New-Object System.Windows.Forms.Button
@@ -149,33 +188,15 @@ function global:New-Button {
     $b.Size = New-Object System.Drawing.Size($Width, 32)
     $b.Font = New-UiFont -FamilyOverride (Get-UiFontName $Text) -Size 10
     $b.FlatStyle = 'Flat'
+    $b.UseVisualStyleBackColor = $false
     if ($Primary) {
-        $b.BackColor = $colorPrimary
-        $b.ForeColor = [System.Drawing.Color]::White
-        $b.FlatAppearance.BorderSize = 0
         $b.Tag = 'primary'
     } else {
-        $b.BackColor = [System.Drawing.Color]::White
-        $b.ForeColor = $colorText
-        $b.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(200, 198, 196)
         $b.Tag = 'secondary'
+        $b.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(200, 198, 196)
     }
-    # Estado desabilitado: fundo cinza + texto preto
-    $applyEnabledState = {
-        if ($b.Enabled) {
-            if ($b.Tag -eq 'primary') {
-                $b.BackColor = $colorPrimary
-                $b.ForeColor = [System.Drawing.Color]::White
-            } else {
-                $b.BackColor = [System.Drawing.Color]::White
-                $b.ForeColor = $colorText
-            }
-        } else {
-            $b.BackColor = $colorDisabledBg
-            $b.ForeColor = $colorDisabledText
-        }
-    }.GetNewClosure()
-    $b.Add_EnabledChanged($applyEnabledState)
+    Apply-ButtonState $b
+    $b.Add_EnabledChanged({ param($sender, $e) Apply-ButtonState $sender })
     return $b
 }
 
@@ -257,7 +278,6 @@ function Show-StepWelcome {
 
     $btnBack.Visible = $false
     $btnNext.Text = 'Avançar >'
-    $btnNext.Tag = 'welcome'
 }
 
 function Show-StepPrerequisites {
@@ -327,7 +347,6 @@ function Show-StepPrerequisites {
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Tag = 'prereq'
 
     # Roda verificação depois que a UI acabar de renderizar (via Timer 100ms).
     $timer = New-Object System.Windows.Forms.Timer
@@ -435,7 +454,6 @@ function Show-StepAppRegistration {
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Tag = 'appreg'
     $global:onNext = {
         $cid = $txtClientId.Text.Trim()
         if (-not (Test-GuidFormat $cid)) {
@@ -501,7 +519,6 @@ function Show-StepLists {
             $global:listsOk = $true
             $lblStatus.Text = '✅ Listas verificadas — pode avançar'
             $lblStatus.ForeColor = $colorSuccess
-            $btnNext.Enabled = $true
         } catch {
             Write-Log $log "❌ Falha: $($_.Exception.Message)" $colorDanger
             $lblStatus.Text = '❌ Falha na verificação - veja o log acima'
@@ -513,9 +530,13 @@ function Show-StepLists {
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Enabled = $false
-    $btnNext.Tag = 'lists'
-    $global:onNext = $null
+    $global:onNext = {
+        if (-not $global:listsOk) {
+            Show-ErrorBox 'Clique em "Verificar as listas" antes de avançar.'
+            return $false
+        }
+        return $true
+    }.GetNewClosure()
 }
 
 function Show-StepManualUpload {
@@ -564,26 +585,29 @@ Dica: se o app não aparecer para adicionar no site (passo 4), volte no passo 3 
         $content.Controls.Add($btnOpenFolder)
     }
 
-    $lblWarn = New-Label -Text '⚠ Não avance sem completar TODOS os 5 passos acima. Depois clique em "Já fiz o upload".' -X 20 -Y 300 -Width 700 -Color $colorDanger -Bold $true -FontSize 10
+    $lblWarn = New-Label -Text '⚠ Não avance sem completar TODOS os 5 passos acima. Marque a caixa abaixo para confirmar.' -X 20 -Y 300 -Width 700 -Color $colorDanger -Bold $true -FontSize 10
     $content.Controls.Add($lblWarn)
 
-    $btnConfirm = New-Button -Text '✓ Já fiz o upload' -X 20 -Y 340 -Width 200 -Primary $true
-    $content.Controls.Add($btnConfirm)
-
-    $lblStatus = New-Label -Text 'Aguardando confirmação...' -X 240 -Y 345 -Width 480 -Color $colorMuted
-    $content.Controls.Add($lblStatus)
+    $chkConfirm = New-Object System.Windows.Forms.CheckBox
+    $chkConfirm.Text = 'Confirmo que subi o .sppkg no App Catalog e adicionei o app no site'
+    $chkConfirm.Location = New-Object System.Drawing.Point(20, 340)
+    $chkConfirm.Size = New-Object System.Drawing.Size(700, 30)
+    $chkConfirm.Font = New-UiFont -Size 10
+    $chkConfirm.ForeColor = $colorText
+    $chkConfirm.BackColor = [System.Drawing.Color]::Transparent
+    $chkConfirm.Checked = $global:uploadOk
+    $chkConfirm.Add_CheckedChanged({ $global:uploadOk = $chkConfirm.Checked }.GetNewClosure())
+    $content.Controls.Add($chkConfirm)
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Enabled = $false
-    $global:onNext = $null
-
-    $btnConfirm.Add_Click({
-        $lblStatus.Text = '✅ Confirmado — pode avançar'
-        $lblStatus.ForeColor = $colorSuccess
-        $btnNext.Enabled = $true
-        $btnConfirm.Enabled = $false
-    }.GetNewClosure())
+    $global:onNext = {
+        if (-not $global:uploadOk) {
+            Show-ErrorBox 'Marque a caixa "Confirmo que subi o .sppkg..." antes de avançar.'
+            return $false
+        }
+        return $true
+    }.GetNewClosure()
 }
 
 function Show-StepConfigure {
@@ -614,8 +638,13 @@ function Show-StepConfigure {
 
     $btnBack.Visible = $true
     $btnNext.Text = 'Avançar >'
-    $btnNext.Enabled = $false
-    $global:onNext = $null
+    $global:onNext = {
+        if (-not $global:configOk) {
+            Show-ErrorBox 'Clique em "Criar e configurar agora" antes de avançar.'
+            return $false
+        }
+        return $true
+    }.GetNewClosure()
 
     $btnRun.Add_Click({
         $bibName = ($txtBib.Text.Trim() -replace '\.aspx$','')
@@ -788,7 +817,7 @@ function Show-StepConfigure {
             if ($job.State -eq 'Completed') {
                 Write-Log $log ''
                 Write-Log $log '🎉 Tudo configurado! Clique em Avançar.' $colorSuccess
-                $btnNext.Enabled = $true
+                $global:configOk = $true
             } else {
                 Write-Log $log "❌ Job terminou com estado: $($job.State)" $colorDanger
             }
@@ -832,8 +861,7 @@ function Show-StepDone {
 
     $btnBack.Visible = $false
     $btnNext.Text = 'Fechar'
-    $btnNext.Tag = 'done'
-    $btnNext.Enabled = $true
+    $global:isDoneStep = $true
 }
 
 # =========================================================================
@@ -919,6 +947,7 @@ function global:Invoke-ListProvisioning {
 # =========================================================================
 function Show-Current {
     $global:onNext = $null  # reset callback do passo
+    $global:isDoneStep = $false
     switch ($global:currentStep) {
         1 { Show-StepWelcome }
         2 { Show-StepPrerequisites }
@@ -934,6 +963,8 @@ function Update-Header {
     $lblStep.Text = "Etapa $($global:currentStep) de $global:totalSteps"
     $progressBar.Value = [int](($global:currentStep / $global:totalSteps) * 100)
     $btnNext.Enabled = $true
+    Apply-ButtonState $btnNext
+    Apply-ButtonState $btnBack
 }
 
 # =========================================================================
@@ -1064,7 +1095,7 @@ $btnNext.Add_Click({
         if (-not $goAhead) { return }
         $global:onNext = $null
     }
-    if ($btnNext.Tag -eq 'done') { $form.Close(); return }
+    if ($global:isDoneStep) { $form.Close(); return }
     if ($global:currentStep -lt $global:totalSteps) {
         $global:currentStep++
         Show-Current
